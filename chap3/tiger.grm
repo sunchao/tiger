@@ -1,0 +1,136 @@
+(* $Id: tiger.grm,v 1.1 2012/02/14 22:03:17 csun Exp $ *)
+
+%%
+%term
+    EOF 
+  | ID of string
+  | INT of int | STRING of string 
+  | COMMA | COLON | SEMICOLON | LPAREN | RPAREN | LBRACK | RBRACK 
+  | LBRACE | RBRACE | DOT 
+  | PLUS | MINUS | TIMES | DIVIDE | EQ | NEQ | LT | LE | GT | GE
+  | AND | OR | ASSIGN
+  | ARRAY | IF | THEN | ELSE | WHILE | FOR | TO | DO | LET | IN | END | OF 
+  | BREAK | NIL
+  | FUNCTION | VAR | TYPE | UMINUS
+
+%nonterm  exp | program | ty | tyfs | tyfs_t | args | args_t
+	| decs | tydec | vardec | fundec | rcd | rcd_t | lval | lval_t
+	| exp_seq | exp_seq_t 
+
+%pos int
+%verbose
+%start program
+%eop EOF
+%noshift EOF
+
+
+%name Tiger
+
+%keyword WHILE FOR TO BREAK LET IN END FUNCTION VAR TYPE ARRAY IF THEN ELSE 
+	DO OF NIL
+
+%prefer THEN ELSE LPAREN
+
+%value ID ("bogus")
+%value INT (1)
+%value STRING ("")
+
+%right OF
+%nonassoc DO
+%nonassoc ELSE
+%nonassoc ASSIGN
+%left AND OR
+%nonassoc EQ NEQ LT GT LE GE
+%left PLUS MINUS
+%left TIMES DIVIDE
+%left UMINUS
+
+%%
+
+(* This is a skeleton grammar file, meant to illustrate what kind of
+ * declarations are necessary above the %% mark.  Students are expected
+ *  to replace the two dummy productions below with an actual grammar. 
+ *)
+
+program	: exp				()
+
+decs : (* empty *)			()
+	| tydec decs			()
+	| vardec decs			()
+	| fundec decs			()
+
+tydec : TYPE ID EQ ty	()
+
+ty : ID			()
+	| LBRACE tyfs RBRACE	()
+	| ARRAY OF ID		()
+
+tyfs : (* empty *)		()
+	| ID COLON ID tyfs_t	()
+
+tyfs_t : (* empty *)	()
+	| COMMA ID COLON ID tyfs_t	()
+
+vardec : VAR ID ASSIGN exp 	()
+	| VAR ID COLON ID ASSIGN exp	()
+
+fundec : FUNCTION ID LPAREN tyfs RPAREN EQ exp	()
+	| FUNCTION ID LPAREN tyfs RPAREN COLON ID EQ exp	()
+
+args : (* empty *)	()
+	| exp args_t	()
+
+args_t : (* empty *)			()
+	| COMMA exp args_t		()
+
+rcd : (* empty *)		()
+	| ID EQ exp rcd_t	()
+
+rcd_t : (* empty *)			()
+	| COMMA ID EQ exp rcd_t		()
+
+lval : ID		()
+	| lval_t	()
+
+lval_t : ID DOT ID	()
+	| lval_t DOT ID	()
+	| ID LBRACK exp RBRACK		()
+	| lval_t LBRACK exp RBRACK	()
+
+exp: lval				()
+	| NIL				()
+	| INT				()
+	| STRING			()
+	| MINUS exp %prec UMINUS	()	(* negation *)
+	| LPAREN exp_seq RPAREN		()
+	| ID LPAREN args RPAREN		()	(* function call *)
+	| ID LBRACE rcd RBRACE		()	(* record creation *)
+	| ID LBRACK exp RBRACK OF exp  	()	(* array creation *)
+	| lval ASSIGN exp 		()	(* l-value assignment *)
+	| IF exp THEN exp ELSE exp	()	(* if-then-else *)
+	| IF exp THEN exp %prec DO	()	(* if-then *)
+	| WHILE exp DO exp		()	(* while-loop *)
+	| FOR ID ASSIGN exp TO exp DO exp 	()	(* for-loop *)
+	| BREAK				()
+	| LET decs IN exp_seq END	()	(* let *)
+	| exp MINUS exp 			()  	(* subtraction *)
+	| exp DIVIDE exp 			()  	(* division *)
+	| exp TIMES exp 			()  	(* multiplication *)
+	| exp EQ exp 			()  	(* test equality *)
+	| exp NEQ exp 			()  	(* test non-equality *)
+	| exp GT exp 			()  	(* test greater-than *)
+	| exp LT exp 			()  	(* test less-than *)
+	| exp GE exp 			()  	(* test greater-or-equal-than *)
+	| exp LE exp 			()  	(* test less-or-equal-than *)
+	| exp AND exp 			()  	(* boolean and *)
+	| exp OR exp 			()  	(* boolean or *)
+	| exp PLUS exp 			() 	(* addition *)
+
+exp_seq : (* empty *)			()	(* no value *)
+	| exp exp_seq_t			()
+
+exp_seq_t : (* empty *)			()
+	| SEMICOLON exp exp_seq_t	()
+
+
+

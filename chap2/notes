@@ -1,0 +1,13 @@
+1. for parsing string, we need to have a "buffer" hold characters
+that we've seen so far. This is accomplished by defining a string
+reference.
+
+2. somehow the order for rules matters. For instance, if I switch
+the order of the following two rules:
+
+<STRING>"\""	=> (YYBEGIN INITIAL; Tokens.STRING(!str,!strPos,!strPos+String.size(!str)));
+<STRING>.|\n	=> (str := (!str ^ yytext); continue());
+
+then it seems the "\"" will be matched by the second rule and then
+every character after that string will be ignored by the scanner.
+
