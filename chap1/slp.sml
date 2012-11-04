@@ -76,6 +76,7 @@ fun interpStm (s,tb) : table =
 	    in
 		interpStm (PrintStm t,tb1)
 	    end
+
 and interpExp (e,tb) : int * table =
     case e of 
 	IdExp id => (lookup (tb,id),tb)

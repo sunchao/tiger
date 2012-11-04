@@ -1,15 +1,14 @@
 Group is
 
+driver.sml
 table.sig
 table.sml
-symbol.sml
 types.sml
 env.sig
 env.sml
-../chap4/absyn.sml
-../chap4/errormsg.sml
 translate.sml
 semant.sig
 semant.sml
+../chap4/sources.cm
 $/basis.cm
 $/smlnj-lib.cm

@@ -1,8 +1,8 @@
 Group is
 
 tiger.lex
-errormsg.sml
 parsetest.sml
+errormsg.sml
 tiger.grm
 $/basis.cm
 $/smlnj-lib.cm
