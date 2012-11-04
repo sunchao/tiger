@@ -1,0 +1,4 @@
+BUG:
+the pre-compiled tiger.lex.sml
+will treat (* ... *) as comments,
+instead of /* ... */.
