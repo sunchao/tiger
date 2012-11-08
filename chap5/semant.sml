@@ -53,6 +53,12 @@ fun checktype(t1:T.ty, t2:T.ty, pos) =
       else ()
     end
 
+fun checkdup([], []) = ()
+  | checkdup(name::rest, pos::poss) =
+    if (List.all (fn (x) => (name <> x)) rest) then checkdup(rest,poss)
+    else err pos ("duplicated definition " ^ S.name(name))
+    
+    
 fun transExp(venv, tenv) =
     let fun trexp(A.NilExp) = {exp=(),ty=T.NIL}
 
@@ -86,18 +92,20 @@ fun transExp(venv, tenv) =
                 end
             end
 
-          | trexp (A.SeqExp(exps)) = 
+          | trexp(A.SeqExp(exps)) = 
             (case exps of
                nil => {exp=(),ty=T.UNIT}
              | e :: nil => (trexp (#1 e))
              | hd :: tl => (trexp (#1 hd); trexp (A.SeqExp(tl))))
 
-          | trexp (A.AssignExp{var,exp,pos}) =
+          | trexp(A.AssignExp{var,exp,pos}) =
             (checktype(#ty (trvar var), #ty (trexp exp), pos);
              {exp=(),ty=T.UNIT})
 
-          | trexp (A.IfExp{test, then', else', pos}) = 
+          | trexp(A.IfExp{test, then', else', pos}) = 
+
              let val lt = #ty (trexp then') in
+               checktype(T.UNIT,lt,pos);
                checktype(T.INT,#ty (trexp test),pos);
                case else' of
                  NONE => ()
@@ -110,7 +118,7 @@ fun transExp(venv, tenv) =
                {exp=(),ty=lt} (* use type from then branch as result *)
              end
                       
-          | trexp (A.WhileExp{test,body,pos}) =
+          | trexp(A.WhileExp{test,body,pos}) =
             (checktype(T.INT, #ty (trexp test), pos);
              checktype(T.UNIT, #ty (trexp body), pos);
              {exp=(),ty=T.UNIT})
@@ -234,8 +242,6 @@ and transDec(venv,tenv,A.VarDec{name,escape,typ,init,pos}) =
        {tenv=tenv,venv=S.enter(venv,name,E.VarEntry{ty=ty})}
     end
 
-    
-
   (* type declaration maybe recursive, therefore
      we need two steps: first fill the tenv with
      "empty" headers, then pass the tenv to 
@@ -244,17 +250,14 @@ and transDec(venv,tenv,A.VarDec{name,escape,typ,init,pos}) =
   | transDec (venv,tenv,A.TypeDec(tdecs)) =
     let val tenv' = 
             foldl (fn ({name,ty,pos},env) => 
-                      S.enter(env,name,T.NAME(name,ref NONE)))
-                  tenv tdecs
-            
+                      S.enter(env,name,T.NAME(name,ref NONE))) tenv tdecs
         val tenv'' = 
             foldl (fn ({name,ty,pos},env) => 
                       (case S.look(env,name) of 
                          SOME(T.NAME(n,r)) => r := SOME(transTy(env,ty));
-                       env))
-                  tenv' tdecs
-            
-    in {venv=venv, tenv=tenv''}
+                       env)) tenv' tdecs
+    in checkdup(map #name tdecs,map #pos tdecs);
+       {venv=venv, tenv=tenv''}
     end
     
   (* 
@@ -283,7 +286,6 @@ and transDec(venv,tenv,A.VarDec{name,escape,typ,init,pos}) =
                      (err pos ("result type " 
                                ^ S.name(rt) ^ " not found.");
                       T.NIL))
-                              
             val fs = 
                 map (fn {name,escape,typ,pos} =>
                         case S.look(tenv,typ) of
@@ -291,7 +293,8 @@ and transDec(venv,tenv,A.VarDec{name,escape,typ,init,pos}) =
                         | NONE => 
                           (err pos ("parameter type '" ^ 
                            S.name(typ) ^ "' not found"); T.UNIT)) params
-          in S.enter(env,name,E.FunEntry{formals=fs,result=result_ty})
+          in checkdup(map #name params, map #pos params);
+            S.enter(env,name,E.FunEntry{formals=fs,result=result_ty})
           end
     in
       let 
@@ -322,12 +325,14 @@ and transDec(venv,tenv,A.VarDec{name,escape,typ,init,pos}) =
               transExp(venv'',tenv) body;
               {venv=venv'', tenv=tenv}
             end
-      in foldl transbody {tenv=tenv,venv=venv} fundecs
+      in checkdup(map #name fundecs,map #pos fundecs);
+        foldl transbody {tenv=tenv,venv=venv} fundecs
       end
     end
 
 
 and transTy(tenv,A.NameTy(sym,pos)) =
+    (* detect mutually recursive types *)
     (case S.look(tenv,sym) of
        SOME(t) => T.NAME(sym,ref(SOME(t)))
      (* this shouldn't happen *)
@@ -335,14 +340,14 @@ and transTy(tenv,A.NameTy(sym,pos)) =
                 T.NAME(sym,ref NONE)))
     
   | transTy(tenv,A.RecordTy(fields)) =
-    T.RECORD(
-    (map (fn (f) => 
-             case S.look(tenv,#typ f) of
-               SOME(t) => (#name f,t)
-             | NONE => (err (#pos f) 
-                            ("undefined type '" ^ S.name (#typ f) ^ "'");
-                        ((#name f),T.UNIT)))
-         fields), ref())
+    (checkdup(map #name fields, map #pos fields);
+     T.RECORD(
+     (map (fn (f) => 
+              case S.look(tenv,#typ f) of
+                SOME(t) => (#name f,t)
+              | NONE => (err (#pos f) 
+                             ("undefined type '" ^ S.name (#typ f) ^ "'");
+                         ((#name f),T.UNIT))) fields), ref()))
     
   | transTy(tenv,A.ArrayTy(sym,pos)) =
     case S.look(tenv,sym) of
