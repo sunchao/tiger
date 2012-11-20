@@ -1,4 +1,4 @@
-structure Compile =
+structure Main =
 struct
 
 fun compile filename = 
@@ -9,6 +9,10 @@ fun compile filename =
         print "output: \n";
         Semant.transProg(ast)
         handle _ => ErrorMsg.error 1 "type checked failed\n"
+    end
+
+fun main(cmd: string, args: string list): OS.Process.status = 
+    let in app compile args; 0
     end
 end
                    
