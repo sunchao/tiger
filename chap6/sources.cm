@@ -6,6 +6,8 @@ mipsframe.sml
 frame.sig
 temp.sml
 temp.sig
+findescape.sml
+../chap4/absyn.sml
 ../chap4/symbol.sml
 ../chap4/table.sml
 ../chap4/table.sig
