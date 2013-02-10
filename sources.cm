@@ -1,6 +1,7 @@
 Group is
 
 main.sml
+liveness.sml
 makegraph.sml
 flowgraph.sml
 graph.sml
@@ -23,7 +24,15 @@ temp.sig
 env.sml
 env.sig
 types.sml
-../chap4/sources.cm
+absyn.sml
+errormsg.sml
+table.sml
+table.sig
+
+symbol.sml
+parse.sml
+tiger.lex
+tiger.grm
 $/basis.cm
 $/smlnj-lib.cm
 $/ml-yacc-lib.cm
