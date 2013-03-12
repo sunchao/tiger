@@ -1,6 +1,8 @@
 Group is
 
 main.sml
+color.sml
+color.sig
 liveness.sml
 makegraph.sml
 flowgraph.sml
@@ -21,6 +23,7 @@ frame.sig
 tree.sml
 temp.sml
 temp.sig
+prabsyn.sml
 env.sml
 env.sig
 types.sml
@@ -28,7 +31,6 @@ absyn.sml
 errormsg.sml
 table.sml
 table.sig
-
 symbol.sml
 parse.sml
 tiger.lex
