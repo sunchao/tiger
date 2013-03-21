@@ -23,6 +23,8 @@ val outermost = Top
 
 val fragments : frag list ref = ref nil
 
+fun reset () = fragments := nil
+
 fun getResult () = !fragments
 
 val errexp = Ex(T.CONST 0)
@@ -50,7 +52,8 @@ fun allocLocal lev escape =
 
 fun seq stmlist = 
     case stmlist of
-      [s1,s2] => T.SEQ(s1,s2)
+      [s] => s
+    | [s1,s2] => T.SEQ(s1,s2)
     | stm :: rest => T.SEQ(stm,seq(rest))
 
 (* unEx : exp -> Tree.exp *)
@@ -180,20 +183,16 @@ fun ifelse (testexp,thenexp,elseexp: exp option) : exp =
       | Nx(thenstm) => 
         (case elseexp of
           NONE => 
-          Ex(T.ESEQ(seq[testfun(t,f), 
-                        T.LABEL t, thenstm,
-                        T.LABEL f,
-                        T.MOVE(T.TEMP r, T.CONST 0)],
-                       T.TEMP r))
+          Nx(seq[testfun(t,f), 
+                 T.LABEL t, thenstm,
+                 T.LABEL f])
         | SOME(Nx(elsestm)) => (* must be a statement *)
-          Ex(T.ESEQ(seq[testfun(t,f), 
-                        T.LABEL t, thenstm,
-                        T.JUMP (T.NAME finish, [finish]),
-                        T.LABEL f, elsestm,
-                        T.JUMP (T.NAME finish, [finish]),
-                        T.LABEL finish,
-                        T.MOVE(T.TEMP r, T.CONST 0)],
-                       T.TEMP r)))
+          Nx(seq[testfun(t,f), 
+                 T.LABEL t, thenstm,
+                 T.JUMP (T.NAME finish, [finish]),
+                 T.LABEL f, elsestm,
+                 T.JUMP (T.NAME finish, [finish]),
+                 T.LABEL finish]))
       | Cx(cf) => (* TODO: fix this *)
         let val z = Temp.newlabel() in
           case elseexp of 
@@ -209,6 +208,7 @@ fun ifelse (testexp,thenexp,elseexp: exp option) : exp =
         end
     end
 
+(* creating a record (see page 164) *)
 fun record (fields) : exp = 
     let 
       val r = Temp.newtemp() 
@@ -225,7 +225,7 @@ fun record (fields) : exp =
             T.MOVE(
             memplus(T.TEMP r, T.CONST(index*F.wordSize)),
             unEx(e)) :: loop(rest,index+1)
-    in Nx(seq(init::loop(fields,0))) end
+    in Ex(T.ESEQ(seq(init::loop(fields,0)),T.TEMP r)) end
     
 
 fun array (size, init) : exp = 
@@ -248,7 +248,9 @@ fun loop (test, body, done_label) =
 
 fun break (label) : exp = Nx(T.JUMP(T.NAME label, [label]))
 
-fun call (uselevel,deflevel,label,exps) : exp = 
+exception NotPossible
+
+fun call (uselevel,deflevel,label,exps,isprocedure) : exp = 
     (* find the difference of static nesting depth
      * between uselevel and deflevel *)
     let 
@@ -258,20 +260,29 @@ fun call (uselevel,deflevel,label,exps) : exp =
               Top => 0
             | Lev({parent,...},_) => 1 + depth(parent)
       val diff = depth uselevel - depth deflevel + 1
-      fun iter (depth,curlevel) = 
-          if depth = 0 then T.TEMP Frame.FP
+      fun iter (d,curlevel) = 
+          if d = 0 then T.TEMP Frame.FP
           else
             let val Lev({parent,frame},_) = curlevel in
-              Frame.exp(hd(Frame.formals frame))(iter(depth-1,parent))
+              Frame.exp(hd(Frame.formals frame))(iter(d-1,parent)) 
             end
-    in Ex(T.CALL(T.NAME label, (iter(diff,uselevel)) :: tree_exps)) end
+      val call = T.CALL(T.NAME label, (iter(diff,uselevel)) :: tree_exps)
+    in if isprocedure then Nx(T.EXP(call)) else Ex(call) end
 
+(* result is the last exp *)
 fun sequence (exps: exp list) =
     let val len = List.length exps in
       if len = 0 then Ex(T.CONST 0)
       else if len = 1 then hd(exps)
-      else Nx(seq(map (fn (e) => unNx(e)) exps))
+      else 
+        let val first = seq(map unNx (List.take(exps,length(exps)-1)))
+            val last = List.last(exps) in
+          case last of
+            Nx(s) => Nx(T.SEQ(first,s))
+          | _ => Ex(T.ESEQ(first,unEx(last)))
+        end
     end
+
       
 fun letexp (decs,body) = 
     let val len = List.length decs in
@@ -280,10 +291,9 @@ fun letexp (decs,body) =
       else let val s = map unNx decs in Ex(T.ESEQ(seq s,unEx(body))) end
     end
 
-(* TODO: fix this *)
+
 fun procEntryExit (Lev({frame,...},_),body) = 
-    fragments := Frame.PROC{frame=frame,
-                              body=T.MOVE(T.TEMP Frame.RV, unEx(body))}
-                   :: !fragments
-end
-    
+    let val body' = Frame.procEntryExit1(frame,T.MOVE(T.TEMP Frame.RV,unEx(body)))
+    in fragments := Frame.PROC{frame=frame,body=body'} :: !fragments
+    end
+end    
