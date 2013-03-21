@@ -21,13 +21,14 @@ sig
   val array : exp * exp -> exp
   val loop : exp * exp * Temp.label -> exp
   val break : Temp.label -> exp
-  val call : level * level * Temp.label * exp list -> exp
+  val call : level * level * Temp.label * exp list * bool -> exp
   val assign : exp * exp -> exp
   val sequence : exp list -> exp
   val nilexp : exp
   val letexp : exp list * exp -> exp
 
   val getResult : unit -> frag list
+  val reset : unit -> unit
 
   structure Frame : FRAME
   val procEntryExit : level * exp -> unit
