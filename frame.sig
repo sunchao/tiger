@@ -2,6 +2,8 @@ signature FRAME =
 sig
   type frame
   type access
+
+  (* don't know why on the book the type is different *)
   val newFrame : {name: Temp.label,
                   formals: bool list} -> frame
   val name: frame -> Temp.label
@@ -11,12 +13,19 @@ sig
 
   val FP: Temp.temp
   val RV: Temp.temp (* for return value *)
+  val RA: Temp.temp
   val wordSize: int
   val exp: access -> Tree.exp -> Tree.exp
 
   type register = string
 
+
   val registers : register list
+
+  (* TODO: hide these *)
+  val argregs : Temp.temp list
+  val callersaves : Temp.temp list
+  val calleesaves : Temp.temp list
 
   val procEntryExit1 : frame * Tree.stm -> Tree.stm
   val procEntryExit2 : frame * Assem.instr list -> Assem.instr list
