@@ -35,13 +35,18 @@ val base_funs : fun_info list =
 
 val base_venv =
     List.foldr
-        (fn (f_info,env) =>
-            (S.enter (env,S.symbol(#1f_info),
-                      FunEntry{level=Translate.outermost,
-                               label=Temp.newlabel(),
-                               formals=(#2f_info),
-                               result=(#3f_info)})))
-        S.empty base_funs
+      (fn ((name,formals,result),env) =>
+          let val label = Temp.namedlabel name in
+            S.enter (env,S.symbol(name),
+                     FunEntry{level=Translate.newLevel
+                                        {parent=Translate.outermost,
+                                         name=label,
+                                         formals=map (fn _ => false) formals},
+                              label=label,
+                              formals=formals,
+                              result=result})
+          end)
+      S.empty base_funs
 
 end
 
