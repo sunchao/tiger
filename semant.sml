@@ -281,10 +281,11 @@ fun transExp (venv,tenv,level,break) =
           (err pos ("function expected, but variable of type: "
                     ^ type2str(ty) ^ " found"); err_result)
         | SOME(E.FunEntry{level=funlevel,label,formals,result}) => 
+          (* if result is unit, we return a stm, otherwise return a exp *)
           let
             val argexps = map trexp args in
             checkformals(formals,argexps,pos);
-            {exp=R.call(level,funlevel,label,map #exp argexps),
+            {exp=R.call(level,funlevel,label,map #exp argexps,result=T.UNIT),
              ty=actual_ty(result,pos)}
           end
 
@@ -366,7 +367,7 @@ and transDec (venv,tenv,level,exps,A.VarDec{name,escape,typ,init,pos},break) =
         (if (ty = T.NIL) then (err pos "can't use nil") else ();
          {tenv=tenv,
           venv=S.enter(venv,name,E.VarEntry{access=acc,ty=ty}),
-          exps=R.assign(exp,varexp) :: exps})
+          exps=R.assign(varexp,exp) :: exps})
          
       | SOME((tname,pos)) => 
         case S.look (tenv,tname) of
@@ -460,7 +461,6 @@ and transDec (venv,tenv,level,exps,A.VarDec{name,escape,typ,init,pos},break) =
                           ^ S.name name ^ " not found"); T.UNIT)) params
             
           val es = map (fn {escape,...} => !escape) params
-                        
         in 
           checkdup(map #name params, map #pos params);
           S.enter(env,name,
@@ -468,7 +468,7 @@ and transDec (venv,tenv,level,exps,A.VarDec{name,escape,typ,init,pos},break) =
                   level=Translate.newLevel{parent=level,
                                            name=name,
                                            formals=es},
-                  label = Temp.newlabel(),formals=fs,result=rt})
+                  label=name,formals=fs,result=rt})
         end
     in
       let 
@@ -530,6 +530,7 @@ and transTy (tenv,A.NameTy(sym,pos)) =
 (* TODO: change return value *)
 fun transProg(exp:Absyn.exp) = 
     let
+      val _ = Translate.reset() (* clear fragment list *)
       val mainlevel =
           Translate.newLevel{parent=Translate.outermost,
                              name=Temp.namedlabel "_main",
