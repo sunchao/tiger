@@ -1,5 +1,3 @@
-(* $Id: findescape.sml,v 1.3 2012/12/07 14:37:33 csun Exp $ *)
-
 (**
  * Whenever a variable or formal parameter
  * is defined at depth d but used at depth d',
@@ -14,7 +12,6 @@ structure A = Absyn
 
 type depth = int
 type escEnv = (depth * bool ref) S.table
-
 
 fun traverseVar(env:escEnv, d:depth, s:A.var): unit =
     case s of 
@@ -44,7 +41,8 @@ and traverseExp(env:escEnv, d:depth, s:A.exp): unit =
       (traverseExp(env,d,test);
        traverseExp(env,d,then');
        (case else' of
-          SOME(else'') => traverseExp(env,d,else'')))
+          SOME(else'') => traverseExp(env,d,else'')
+        | NONE => ()))
     | A.WhileExp({test,body,...}) =>
       (traverseExp(env,d,test);traverseExp(env,d,body))
     | A.ForExp({var,escape,lo,hi,body,pos}) => 
