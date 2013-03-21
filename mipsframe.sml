@@ -6,9 +6,9 @@ structure S = Symbol
 structure TP = Temp
 
 type register = string
-type frame = {name: TP.label, formals: bool list, size: int ref}
 datatype access = InFrame of int | InReg of TP.temp
-
+type frame = { name: TP.label, formals: access list, 
+               locals: int ref, instrs: T.stm list }
 datatype frag =
          PROC of {body:T.stm, frame:frame}
 	     | STRING of TP.label * string
@@ -65,52 +65,71 @@ val calleesaves = [s0,s1,s2,s3,s4,s5,s6,s7]
 
 val callersaves = [t0,t1,t2,t3,t4,t5,t6,t7]
 
+val reglist =
+    [("zero",ZERO),("a0",a0),("a1",a1),("a2",a2),("a3",a3),
+     ("t0",t0),("t1",t1),("t2",t2),("t3",t3),
+     ("t4",t4),("t5",t5),("t6",t6),("t7",t7),
+     ("s0",s0),("s1",s1),("s2",s2),("s3",s3),
+     ("s4",s4),("s5",s5),("s6",s6),("s7",s7),
+     ("t8",t8),("t9",t9),("GP",GP),("FP",FP),
+     ("v0",v0),("v1",v1),("SP",SP),("RA",RA)]
+
 val tempMap = foldl
-  (fn ((k,v),tb) => TP.Table.enter(tb,v,k)) TP.Table.empty  
-  [("zero",ZERO),("a0",a0),("a1",a1),("a2",a2),("a3",a3),
-   ("t0",t0),("t1",t1),("t2",a0),("t3",a0),
-   ("t4",a0),("t5",a0),("t6",a0),("t7",a0),
-   ("s0",a0),("s1",a0),("s2",a0),("s3",a0),
-   ("s4",a0),("s5",a0),("s6",a0),("s7",a0),
-   ("t8",a0),("t9",a0),("GP",a0),("FP",a0),
-   ("v0",v0),("v1",v1),("SP",a0),("RA",a0)]
-               
-val registers = [] (* TODO: fill this *)
+  (fn ((k,v),tb) => TP.Table.enter(tb,v,k)) TP.Table.empty reglist
+
+(* a list of all register name, which can be used for coloring *)               
+val registers = map #1 reglist
 
 fun string (label, str) : string = 
     S.name label ^ ": .asciiz \"" ^ str ^ "\"\n"
 
-(* make a new frame *)
+fun exp (InFrame(k))= (fn (temp) => T.MEM(T.BINOP(T.PLUS,temp,T.CONST k)))
+  | exp (InReg(temp)) = (fn (_) => T.TEMP temp)
+
+(* make a new frame object, which also includes "view shift" instructions.
+ * Note: right now we only pass parameters through register a0-a3. For
+ * functions with more than 4 paramters, we just give up.. *)
 fun newFrame {name: TP.label, formals: bool list} = 
-    {name=name,formals=formals,size=ref 1}
+    let
+      val n = List.length formals
+      fun iter(nil,_) = nil
+        | iter(b::rest,offset) = 
+          if b then InFrame(offset)::iter(rest,offset+wordSize)
+          else InReg(TP.newtemp())::iter(rest,offset)
+      val accs : access list = iter(formals,0)
+      val instrs = map (fn (a,r) => T.MOVE(exp a (T.TEMP SP), T.TEMP r)) 
+                       (ListPair.zip(accs,argregs))
+    in {name=name,formals=accs,locals=ref 0,instrs=instrs} 
+    end
 
 fun name ({name,...}: frame) = name
 
-(* TODO: fix this? *)
-fun formals ({formals,...}: frame): access list = 
-    let fun iter (nil,_) = nil
-          | iter (b :: rest,offset) = 
-            let val fr = if b then InFrame(offset) else InReg(TP.newtemp())
-            in fr :: iter(rest,offset+wordSize) end
-    in iter(formals,0)
-    end
+fun formals ({formals,...}: frame): access list = formals
 
 (* allocate a local variable either on frame or in register *)
-fun allocLocal ({size,...}: frame) escape = 
+fun allocLocal ({locals,...}: frame) escape = 
     if (escape) then 
-      let val ret = InFrame(!size*wordSize) in
-        size := !size + wordSize; ret end
-    else InReg(TP.newtemp()) (* TODO: fix this *)
-
-fun exp (InFrame(k))= (fn (temp) => T.MEM(T.BINOP(T.PLUS,temp,T.CONST k)))
-  | exp (InReg(temp)) = (fn (_) => T.TEMP temp)
+      let val ret = InFrame((!locals+1)*wordSize) in
+        locals := !locals + 1; ret end
+    else InReg(TP.newtemp())
 
 
 fun externalCall (s,args) = T.CALL(T.NAME(TP.namedlabel s), args)
 
+fun seq nil = T.EXP(T.CONST 0)
+  | seq [st] = st
+  | seq (st :: rest) = T.SEQ(st,seq(rest))
 
-(* TODO: implement it *)
-fun procEntryExit1 (frame,body) : T.stm = body (* for preliminary testing *)
+(* for each incoming register parameter, move it to the place
+from which it is seem from within the function. This could be 
+a frame location (for escaping parameters) or a fresh temporary.*)
+fun procEntryExit1 (frame,body) : T.stm = 
+    let val args = #instrs frame
+        val pairs = map (fn (r) => (allocLocal frame true,r)) (RA :: calleesaves)
+        val saves = map (fn (a,r) => T.MOVE(exp a (T.TEMP FP), T.TEMP r)) pairs
+        val restores = map (fn (a,r) => T.MOVE(T.TEMP r, exp a (T.TEMP FP))) pairs
+    in seq(args @ saves @ [body] @ restores)
+    end
 
 fun procEntryExit2 (frame,body) = 
     body @ 
@@ -119,7 +138,7 @@ fun procEntryExit2 (frame,body) =
             dst=[],jump=SOME[]}]
     
 
-fun procEntryExit3 ({name,formals,size},body) =
+fun procEntryExit3 ({name,formals,locals,instrs},body) =
     {prolog="PROCEDURE " ^ S.name name ^ "\n",
      body=body,epilog="END " ^ S.name name ^ "\n"}
 
