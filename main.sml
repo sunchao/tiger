@@ -3,8 +3,24 @@ structure Main = struct
 structure Tr = Translate
 structure Frame : FRAME = MipsFrame
 structure F = Frame
+structure A = Assem
               
 fun getsome (SOME x) = x
+
+fun addtab instrs = 
+    map (fn (i) => 
+            case i of 
+              l as A.LABEL _ => l
+            | A.OPER{assem,src,dst,jump} => 
+              A.OPER{assem="\t"^assem,src=src,dst=dst,jump=jump}
+            | A.MOVE{assem,dst,src} => 
+              A.MOVE{assem="\t"^assem,src=src,dst=dst}
+        ) instrs
+
+fun tempname temp = 
+    case Temp.Table.look(Frame.tempMap,temp) of
+      SOME(r) => r
+    | NONE => Temp.makestring temp
                        
 fun emitproc out (F.PROC{body,frame}) =
     let val _ = print ("emit " ^ Symbol.name (Frame.name frame) ^ "\n")
@@ -14,13 +30,19 @@ fun emitproc out (F.PROC{body,frame}) =
         val stms' = Canon.traceSchedule(Canon.basicBlocks stms)
         val _ = print "tree after canon:\n"
         val _ = app (fn s => Printtree.printtree(TextIO.stdOut,s)) stms'; 
-	      val instrs =  List.concat(map (MipsGen.codegen frame) stms')
-        val format0 = Assem.format(Temp.makestring)
-    in  app (fn i => TextIO.output(out,format0 i)) instrs end
-    
+	      val instrs = List.concat(map (MipsGen.codegen frame) stms')
+        val {prolog,body,epilog} = Frame.procEntryExit3(frame,instrs)
+        val instrs' = addtab body
+        val format0 = Assem.format(tempname)
+    in  
+      TextIO.output(out,prolog);
+      app (fn i => TextIO.output(out,(format0 i) ^ "\n")) instrs';
+      TextIO.output(out,epilog)
+    end
 
   | emitproc out (F.STRING(lab,s)) = TextIO.output(out,F.string(lab,s))
-                                   
+
+
 fun withOpenFile fname f = 
     let val out = TextIO.openOut fname
     in (f out before TextIO.closeOut out) 
