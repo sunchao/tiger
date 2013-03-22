@@ -1,6 +1,12 @@
-
 type pos = int
-type lexresult = Tokens.token
+
+(* for some strange reason I need to include the following code
+ * (otherwise it wont compile). 
+ * See http://www.smlnj.org/doc/ML-Yacc/mlyacc004.html *)
+type svalue = Tokens.svalue
+type ('a,'b) token = ('a,'b) Tokens.token
+type lexresult  = (svalue,pos) token
+
 
 val lineNum = ErrorMsg.lineNum
 val linePos = ErrorMsg.linePos
@@ -8,6 +14,8 @@ fun err(p1,p2) = ErrorMsg.error p1
 
 fun eof() = let val pos = hd(!linePos) in Tokens.EOF(pos,pos) end
 fun str2int(s) = foldl (fn(a,r) => ord(a)-ord(#"0")+10*r) 0 (explode s)
+
+
 
 %%
 DIGIT=[0-9]+;
@@ -17,6 +25,7 @@ IDENTIFIER=[a-zA-Z][a-zA-Z0-9]*;
 QUOTE=[\"];
 NONQUOTE=[^\"];
 
+%header (functor TigerLexFun (structure Tokens:Tiger_TOKENS));
 %%
 \n	=> (lineNum := !lineNum+1; linePos := yypos :: !linePos; continue());
 
