@@ -392,14 +392,14 @@ fun codegen (frame) (stm:Tree.stm) : Assem.instr list =
           | munchArgs (i, exp :: rest) = 
             let val len = List.length Frame.argregs in
               if i < len then
-                munchStm(T.MOVE(T.TEMP (List.nth(Frame.argregs,i)), 
-                                T.TEMP (munchExp(exp))))
-              else raise TooManyArgs("too many arguments!"); (* TODO: spilling *)
-              Frame.argregs
+                let val r = List.nth(Frame.argregs,i) in
+                  munchStm(T.MOVE(T.TEMP r,T.TEMP (munchExp(exp))));
+                  r :: munchArgs(i+1,rest)
+                end
+              else raise TooManyArgs("too many arguments!") (* TODO: spilling *)
             end
-
+            
     in munchStm stm;
        rev(!ilist)
     end
-
 end
