@@ -72,13 +72,14 @@ val reglist =
      ("s0",s0),("s1",s1),("s2",s2),("s3",s3),
      ("s4",s4),("s5",s5),("s6",s6),("s7",s7),
      ("t8",t8),("t9",t9),("GP",GP),("FP",FP),
-     ("v0",v0),("v1",v1),("SP",SP),("RA",RA)]
+     ("v0",v0),("v1",v1),("SP",SP),("RA",RA), ("RV",RV)]
 
 val tempMap = foldl
   (fn ((k,v),tb) => TP.Table.enter(tb,v,k)) TP.Table.empty reglist
 
 (* a list of all register name, which can be used for coloring *)               
-val registers = map #1 reglist
+val registers = map (fn (x) => case TP.Table.look(tempMap,x) of 
+                        SOME(r) => r) (argregs @ calleesaves @ callersaves)
 
 fun string (label, str) : string = 
     S.name label ^ ": .asciiz \"" ^ str ^ "\"\n"
@@ -109,7 +110,7 @@ fun formals ({formals,...}: frame): access list = formals
 (* allocate a local variable either on frame or in register *)
 fun allocLocal ({locals,...}: frame) escape = 
     if (escape) then 
-      let val ret = InFrame((!locals+1)*wordSize) in
+      let val ret = InFrame((!locals+1)*(~wordSize)) in
         locals := !locals + 1; ret end
     else InReg(TP.newtemp())
 
