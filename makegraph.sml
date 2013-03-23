@@ -2,35 +2,81 @@ signature MAKE_GRAPH =
 sig 
   val instrs2graph: Assem.instr list ->
                     Flow.flowgraph * Graph.node list
+  val show: TextIO.outstream * Flow.flowgraph -> unit
 end
 
 structure MakeGraph : MAKE_GRAPH = 
 struct
 
+structure T = Temp
+structure G = Graph
+structure GT = G.Table
+structure F = Flow
+(* 
+ * Algorithm:
+ * first pass: make node for each instr,
+ * second pass: for each OPER instr, search in the instr list
+ *  for a label that it jumps to, and make a new edge from the 
+ *  node of this instr to the node of the label.
+ * third pass: connect all the nodes in sequential order (which
+ *  are not connected by explicit jump in the original instr)
+ * 
+ * This is probably too inefficient, as it requires O(n^3) time.
+ * But, I'll leave improvement for future. 
+ * 
+ *)
+
+fun show (out,F.FGRAPH{control,def,use,ismove}) = 
+    let 
+      fun process1 node = 
+          TextIO.output(out,
+                        (G.nodename node) ^ "\t" ^
+                        "def[" ^ (String.concatWith ", "
+                        (map T.makestring (valOf(GT.look(def,node))))) ^
+                        "] use[" ^ (String.concatWith ", "
+                        (map T.makestring (valOf(GT.look(use,node))))) ^
+                        "] ismove=" ^ Bool.toString(valOf(GT.look(ismove,node)))
+                        ^ "\n")
+    in app process1 (G.nodes control) end
+
 fun instrs2graph instrs =
     let
-      val graph = Graph.newGraph()
-      val def = Graph.Table.empty
-      val use = Graph.Table.empty
-      val ismove = Graph.Table.empty
+      val graph = G.newGraph ()
+      val def = GT.empty
+      val use = GT.empty
+      val ismove = GT.empty
 
-      fun make_node(instr: Assem.instr) = 
-          let val node = Graph.newNode graph 
+      fun make_node((F.FGRAPH{control,def,use,ismove},nodelist), instr) = 
+          let val node = G.newNode graph 
               val (a,b,c) = 
                   case instr of 
                     Assem.OPER{assem,dst,src,jump} => (dst,src,false)
                   | Assem.LABEL{assem,lab} => (nil,nil,false)
                   | Assem.MOVE{assem,dst,src} => ([dst],[src],true)
           in
-            Graph.Table.enter(def,node,a);
-            Graph.Table.enter(use,node,b);
-            Graph.Table.enter(ismove,node,c);
-            node
+            (F.FGRAPH{control=graph,
+                    def=GT.enter(def,node,a),
+                    use=GT.enter(use,node,b),
+                    ismove=GT.enter(ismove,node,c)
+                   },
+             node::nodelist)
           end
 
-      val nodelist = map make_node instrs
+      (* we have to maintain the order of nodelist wrt instrs *)
+      val (igraph,nodelist) = 
+          foldl (fn (i,(ig,ns)) => make_node((ig,ns),i))
+                (F.FGRAPH{control=G.newGraph (),
+                       def=GT.empty,
+                       use=GT.empty,
+                       ismove=GT.empty},nil) instrs
+                 
       val complist = ListPair.zip (instrs, nodelist)
 
+      fun connect nil = ()
+        | connect [x] = ()
+        | connect (x::(y::rest)) = 
+          (G.mk_edge{from=x,to=y}; connect (y::rest))
+          
       fun do_jump(instr,node) = 
           let fun f l =
                   case List.find
@@ -39,20 +85,15 @@ fun instrs2graph instrs =
                                  Assem.LABEL{lab,...} => l = lab
                                | _ => false
                            ) complist of
-                    SOME((_,n)) => Graph.mk_edge{from=node,to=n}
+                    SOME((_,n)) => G.mk_edge{from=node,to=n}
           in case instr of
-               Assem.OPER{jump=SOME(jlist),...} => map f jlist
+               Assem.OPER{jump=SOME(jlist),...} => (map f jlist; ())
+             | _ => ()
           end
-          
-      fun connect nil = ()
-        | connect [x] = ()
-        | connect (x::y::rest) = 
-          (Graph.mk_edge{from=x,to=y}; connect (y::rest))
           
     in
       map do_jump complist;
       connect nodelist; 
-      (Flow.FGRAPH{control=graph,def=def,use=use,ismove=ismove},
-       nodelist)
+      (igraph,nodelist)
     end
 end
