@@ -40,7 +40,17 @@ type liveMap = liveSet GT.table
 type tempEdge = {src:Temp.temp,dst:Temp.temp}
 
                                                    
-fun show (output,graph) = () (* TODO *)
+fun show (output,{graph,tnode,gtemp,moves}) = 
+    let
+	val node2str = Frame.temp_name o gtemp
+	fun process1 node =
+	    TextIO.output(output,
+			  ((node2str node) ^ " -> {" ^
+			   (String.concatWith 
+				", "
+				(map node2str (Graph.adj node))) ^ "}\n"))
+    in app process1 (Graph.nodes graph) end
+
     
 fun interferenceGraph
         (flowgraph as Flow.FGRAPH{control,def,use,ismove} ) = 
