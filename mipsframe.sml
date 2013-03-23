@@ -74,8 +74,14 @@ val reglist =
      ("t8",t8),("t9",t9),("GP",GP),("FP",FP),
      ("v0",v0),("v1",v1),("SP",SP),("RA",RA), ("RV",RV)]
 
+
 val tempMap = foldl
   (fn ((k,v),tb) => TP.Table.enter(tb,v,k)) TP.Table.empty reglist
+
+fun temp_name t = 
+    case TP.Table.look(tempMap,t) of 
+	SOME(r) => r
+      | NONE => Temp.makestring t
 
 (* a list of all register name, which can be used for coloring *)               
 val registers = map (fn (x) => case TP.Table.look(tempMap,x) of 

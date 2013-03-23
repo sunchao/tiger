@@ -33,6 +33,7 @@ sig
                        {prolog:string,body:Assem.instr list,epilog:string}
 
   val tempMap : register Temp.Table.table
+  val temp_name : temp -> string
 
   datatype frag = PROC of {body: Tree.stm, frame: frame}
                 | STRING of Temp.label * string
