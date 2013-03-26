@@ -28,6 +28,7 @@ structure GT = Graph.Table
 structure S = ListSetFn(TempKey)
 structure T = Temp
 structure TT = Temp.Table
+structure Frame = MipsFrame
 
 datatype igraph =
          IGRAPH of {graph: G.graph,
@@ -40,7 +41,7 @@ type liveMap = liveSet GT.table
 type tempEdge = {src:Temp.temp,dst:Temp.temp}
 
                                                    
-fun show (output,{graph,tnode,gtemp,moves}) = 
+fun show (output,IGRAPH{graph,tnode,gtemp,moves}) = 
     let
 	val node2str = Frame.temp_name o gtemp
 	fun process1 node =
@@ -55,46 +56,54 @@ fun show (output,{graph,tnode,gtemp,moves}) =
 fun interferenceGraph
         (flowgraph as Flow.FGRAPH{control,def,use,ismove} ) = 
   let 
-    val igraph = G.newGraph()
+    val igraph = G.newGraph ()
                  
     val allnodes = G.nodes control
                    
-    fun look (table,key) = case GT.look(table,key) of SOME(v) => v
+    fun look (table,key) = valOf(GT.look(table,key))
 
     (* compute live-in sets for all nodes on graph, using current
      * live-out sets information. Then, we use the live-in sets 
      * information to compute live-out sets *)
-    fun compute_insets (omap:liveMap) : liveMap = 
+    fun compute_insets (liveout_map:liveMap) : liveMap = 
       let 
         fun f n = 
           let 
             val uset = S.addList(S.empty,look(use,n))
             val dset = S.addList(S.empty,look(def,n))
           in
-            S.union(uset,S.difference(look(omap,n),dset))
+            S.union(uset,S.difference(look(liveout_map,n),dset))
           end
       in foldl (fn (n,m) => GT.enter(m, n, f n)) GT.empty allnodes
       end
-      
-    fun compute_outset (imap,node) : liveSet =
-        foldl (fn (n,s) => S.union(look(imap,n),s))
+
+
+    (* compute outset for a particular node *)
+    fun compute_outset (livein_map,node) : liveSet =
+        foldl (fn (n,s) => S.union(look(livein_map,n),s))
               S.empty (G.succ(node))
-        
+
+
+    fun set2str set = "{" ^ (String.concatWith ", "
+                             (map Temp.makestring (S.listItems set))) ^ "}"
+
+    fun println s = print(s ^ "\n")
+
     (* iteratively compute liveSet, until reaches a fix point *)
-    fun iter (omap:liveMap) : liveMap = 
+    fun iter (liveout_map:liveMap) : liveMap = 
       let 
         val changed = ref false
-        val imap = compute_insets omap
-        val newmap = 
+        val livein_map = compute_insets liveout_map
+        val new_liveout_map = 
             foldl
                 (fn (x,m) =>
-                    let val newset = compute_outset(imap,x) in
+                    let val newset = compute_outset(livein_map,x) in
                       if S.isEmpty(S.difference(newset, look(m,x)))
-                      then changed := true else ();
+                      then () else changed := true;
                       GT.enter(m,x,newset)
                     end
-                ) omap (G.nodes control)
-      in if !changed then iter(newmap) else newmap end
+                ) liveout_map (G.nodes control)
+      in if !changed then iter new_liveout_map else new_liveout_map end
       
     val liveout = 
         iter (foldl (fn (n,tb) => GT.enter(tb,n,S.empty)) GT.empty allnodes)
@@ -105,6 +114,7 @@ fun interferenceGraph
      * we add edge (d,t1), ..., (d,tn) to the igraph.
      * Mappings between temps and igraph nodes are also recorded. *)
     let
+
       fun find_edges node : tempEdge list = 
         let
           val defset = look(def,node)
