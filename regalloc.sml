@@ -14,3 +14,4 @@ fun alloc (instrs,frame) : Assem.instr list * allocation =
 					spillCost=(fn _ => 1),
 					registers=Frame.registers}
     in (instrs,alloc) end
+end
