@@ -31,7 +31,9 @@ fun show (out,F.FGRAPH{control,def,use,ismove}) =
       fun process1 node = 
           TextIO.output(out,
                         (G.nodename node) ^ "\t" ^
-                        "def[" ^ (String.concatWith ", "
+                        "adj[" ^ (String.concatWith ", "
+                        (map G.nodename (G.adj node))) ^
+                        "] def[" ^ (String.concatWith ", "
                         (map T.makestring (valOf(GT.look(def,node))))) ^
                         "] use[" ^ (String.concatWith ", "
                         (map T.makestring (valOf(GT.look(use,node))))) ^
