@@ -33,6 +33,8 @@ fun show (out,F.FGRAPH{control,def,use,ismove}) =
                         (G.nodename node) ^ "\t" ^
                         "adj[" ^ (String.concatWith ", "
                         (map G.nodename (G.adj node))) ^
+                        "] succ[" ^ (String.concatWith ", "
+                        (map G.nodename (G.succ node))) ^
                         "] def[" ^ (String.concatWith ", "
                         (map T.makestring (valOf(GT.look(def,node))))) ^
                         "] use[" ^ (String.concatWith ", "
@@ -43,35 +45,30 @@ fun show (out,F.FGRAPH{control,def,use,ismove}) =
 
 fun instrs2graph instrs =
     let
-      val graph = G.newGraph ()
-      val def = GT.empty
-      val use = GT.empty
-      val ismove = GT.empty
-
       fun make_node((F.FGRAPH{control,def,use,ismove},nodelist), instr) = 
-          let val node = G.newNode graph 
+          let val node = G.newNode control 
               val (a,b,c) = 
                   case instr of 
                     Assem.OPER{assem,dst,src,jump} => (dst,src,false)
                   | Assem.LABEL{assem,lab} => (nil,nil,false)
                   | Assem.MOVE{assem,dst,src} => ([dst],[src],true)
           in
-            (F.FGRAPH{control=graph,
+            (F.FGRAPH{control=control,
                     def=GT.enter(def,node,a),
                     use=GT.enter(use,node,b),
                     ismove=GT.enter(ismove,node,c)
                    },
-             node::nodelist)
+             nodelist @ [node])
           end
 
       (* we have to maintain the order of nodelist wrt instrs *)
       val (igraph,nodelist) = 
           foldl (fn (i,(ig,ns)) => make_node((ig,ns),i))
                 (F.FGRAPH{control=G.newGraph (),
-                       def=GT.empty,
-                       use=GT.empty,
-                       ismove=GT.empty},nil) instrs
-                 
+                          def=GT.empty,
+                          use=GT.empty,
+                          ismove=GT.empty},nil) instrs
+
       val complist = ListPair.zip (instrs, nodelist)
 
       fun connect nil = ()
