@@ -62,56 +62,42 @@ fun interferenceGraph
                    
     fun look (table,key) = valOf(GT.look(table,key))
 
-    (* compute live-in sets for all nodes on graph, using current
-     * live-out sets information. Then, we use the live-in sets 
-     * information to compute live-out sets *)
-    fun compute_insets (liveout_map:liveMap) : liveMap = 
-      let 
-        fun f n = 
-          let 
-            val uset = S.addList(S.empty,look(use,n))
-            val dset = S.addList(S.empty,look(def,n))
-          in
-            S.union(uset,S.difference(look(liveout_map,n),dset))
-          end
-      in foldl (fn (n,m) => GT.enter(m, n, f n)) GT.empty allnodes
-      end
-
-
-    (* compute outset for a particular node *)
-    fun compute_outset (livein_map,node) : liveSet =
-        foldl (fn (n,s) => S.union(look(livein_map,n),s))
-              S.empty (G.succ(node))
-
-
     fun set2str set = "{" ^ (String.concatWith ", "
                              (map Temp.makestring (S.listItems set))) ^ "}"
 
     fun println s = print(s ^ "\n")
 
     (* iteratively compute liveSet, until reaches a fix point *)
-    fun iter (liveout_map:liveMap) : liveMap = 
+    fun iter (livein_map,liveout_map) = 
       let 
         val changed = ref false
-        val livein_map = compute_insets liveout_map
-        val new_liveout_map = 
+        fun compute_out (m,n) = 
+            foldl (fn (x,s) => S.union(look(m,x),s))
+                  S.empty (G.succ n)
+        val (new_livein_map, new_liveout_map) = 
             foldl
-                (fn (x,m) =>
-                    let val newset = compute_outset(livein_map,x) in
-                      if S.isEmpty(S.difference(newset, look(m,x)))
-                      then () else changed := true;
-                      GT.enter(m,x,newset)
-                    end
-                ) liveout_map (G.nodes control)
-      in if !changed then iter new_liveout_map else new_liveout_map end
-      
-    val liveout = 
-        iter (foldl (fn (n,tb) => GT.enter(tb,n,S.empty)) GT.empty allnodes)
+              (fn (x,(mi,mo)) =>
+                  let val oldin = look(mi,x)
+                      val oldout = look(mo,x) 
+                      val usex = S.addList(S.empty,look(use,x))
+                      val defx = S.addList(S.empty,look(def,x))
+                      val newin = S.union(usex,S.difference(oldout,defx))
+                      val newout = compute_out(mi,x) 
+                  in
+                    if S.equal(newin,oldin) andalso S.equal(newout,oldout)
+                    then () else changed := true;
+                    (GT.enter(mi,x,newin),GT.enter(mo,x,newout))
+                  end
+              ) (livein_map,liveout_map) (G.nodes control)
+      in
+        if !changed then iter (new_livein_map,new_liveout_map)
+        else new_liveout_map
+      end
 
-    val _ = app
-            (fn (n) => println((G.nodename n) ^ 
-                               (set2str (valOf(GT.look(liveout,n))))))
-            allnodes
+    fun make_empty_map () =
+        foldl (fn (n,m) => GT.enter(m,n,S.empty)) GT.empty allnodes
+
+    val liveout = iter ((make_empty_map ()), (make_empty_map ()))
   in
     (* now for each node n in the flow graph, suppose
      * there is a newly define temp d, and temporaries
@@ -148,7 +134,7 @@ fun interferenceGraph
       fun looknode (n:G.node) : T.temp = valOf(GT.look(node2temp,n))
                                                 
       fun lookliveout (n:G.node) : T.temp list = 
-	  S.listItems(valOf(GT.look(liveout,n))
+	        S.listItems(valOf(GT.look(liveout,n)))
 
       val allmoves = 
         foldl
