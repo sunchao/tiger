@@ -143,14 +143,12 @@ fun interferenceGraph
       val (temp2node,node2temp) = 
         make_table ((map #src all_edges) @ (map #dst all_edges))
           
-      fun looktemp (t: T.temp) : G.node =
-        case TT.look(temp2node,t) of SOME(n) => n
+      fun looktemp (t: T.temp) : G.node = valOf(TT.look(temp2node,t))
                                                 
-      fun looknode (n:G.node) : T.temp =
-        case GT.look(node2temp,n) of SOME(t) => t
+      fun looknode (n:G.node) : T.temp = valOf(GT.look(node2temp,n))
                                                 
-      fun lookliveout (n:G.node) : T.temp list =
-        case GT.look(liveout,n) of SOME(s) => S.listItems(s)
+      fun lookliveout (n:G.node) : T.temp list = 
+	  S.listItems(valOf(GT.look(liveout,n))
 
       val allmoves = 
         foldl
