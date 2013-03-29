@@ -107,6 +107,11 @@ fun interferenceGraph
       
     val liveout = 
         iter (foldl (fn (n,tb) => GT.enter(tb,n,S.empty)) GT.empty allnodes)
+
+    val _ = app
+            (fn (n) => println((G.nodename n) ^ 
+                               (set2str (valOf(GT.look(liveout,n))))))
+            allnodes
   in
     (* now for each node n in the flow graph, suppose
      * there is a newly define temp d, and temporaries
