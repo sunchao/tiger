@@ -1,6 +1,9 @@
 Group is
 
+testliveness.sml
 main.sml
+regalloc.sml
+regalloc.sig
 color.sml
 color.sig
 liveness.sml
