@@ -8,8 +8,8 @@ fun test instrs =
     let val (fgraph,nodelist) = MakeGraph.instrs2graph instrs
         val (igraph,liveout) = Liveness.interferenceGraph fgraph
     in
-      MakeGraph.show(TextIO.stdOut,fgraph)
-      (* Liveness.show(TextIO.stdOut,igraph) *)
+      MakeGraph.show(TextIO.stdOut,fgraph);
+      Liveness.show(TextIO.stdOut,igraph)
     end
 
 val instrs1 = 
