@@ -117,52 +117,53 @@ fun interferenceGraph
         let
           val defset = look(def,node)
           val outlist = S.listItems(look(liveout,node))
-          fun f t = foldl (fn (t',l) =>  (* don't add self-edge *)
-                              if t <> t' then {src=t,dst=t'}::l else l)
-                          nil outlist
+          fun f t = foldl 
+                      (fn (t',l) =>  (* don't add self-edge *)
+                          if t <> t' then {src=t,dst=t'}::l else l)
+                      nil outlist
         in foldl (fn (t,l) => (f t) @ l) nil defset end
-        
-      val all_edges : tempEdge list = 
-          foldl (fn (n,l) => find_edges(n) @ l) nil allnodes
-          
-      fun make_table tlist = 
-        foldl
-          (fn (t,(t2n,n2t)) => 
-            case TT.look(t2n,t) of
-              SOME(n) => (t2n,n2t)
-            | NONE =>
-              let val n = Graph.newNode(igraph) in
-                (TT.enter(t2n,t,n),GT.enter(n2t,n,t)) end
-          ) (TT.empty,GT.empty) tlist
-        
-      val (temp2node,node2temp) = 
-        make_table ((map #src all_edges) @ (map #dst all_edges))
-          
-      fun looktemp (t: T.temp) : G.node = valOf(TT.look(temp2node,t))
-                                                
-      fun looknode (n:G.node) : T.temp = valOf(GT.look(node2temp,n))
-                                                
-      fun lookliveout (n:G.node) : T.temp list = 
-	        S.listItems(valOf(GT.look(liveout,n)))
 
-      val allmoves = 
-        foldl
-          (fn (n,l) =>
-            case GT.look(ismove,n) of
-              SOME(b) => 
-              if b then 
-                let val [src] = look(use,n)
-                    val [dst] = look(def,n) in
-                  (looktemp(src),looktemp(dst)) :: l
-                end
-              else l
-          ) nil allnodes
-                                                  
-    in app (fn {src,dst} => 
-               G.mk_edge{from=looktemp(src),to=looktemp(dst)})
-           all_edges;
-       (IGRAPH{graph=igraph,tnode=looktemp,gtemp=looknode,moves=allmoves},
-        lookliveout)
+       val all_edges : tempEdge list = 
+           foldl (fn (n,l) => find_edges(n) @ l) nil allnodes
+
+       fun make_table tlist = 
+         foldl
+           (fn (t,(t2n,n2t)) => 
+             case TT.look(t2n,t) of
+               SOME(n) => (t2n,n2t)
+             | NONE =>
+               let val n = Graph.newNode(igraph) in
+                 (TT.enter(t2n,t,n),GT.enter(n2t,n,t)) end
+           ) (TT.empty,GT.empty) tlist
+
+       val (temp2node,node2temp) = 
+         make_table ((map #src all_edges) @ (map #dst all_edges))
+
+       fun looktemp (t: T.temp) : G.node = valOf(TT.look(temp2node,t))
+
+       fun looknode (n:G.node) : T.temp = valOf(GT.look(node2temp,n))
+
+       fun lookliveout (n:G.node) : T.temp list = 
+           S.listItems(valOf(GT.look(liveout,n)))
+
+       val allmoves = 
+         foldl
+           (fn (n,l) =>
+             case GT.look(ismove,n) of
+               SOME(b) => 
+               if b then 
+                 let val ([src],[dst]) = (look(use,n),look(def,n)) 
+                 in (looktemp(src),looktemp(dst)) :: l end
+               else l
+           ) nil allnodes
+
+     in app (fn {src,dst} => (* don't add duplicate edges *)
+                let val (srcn,dstn) = (looktemp(src),looktemp(dst)) in
+                  if List.exists (fn (x) => G.eq(dstn,x)) (G.adj srcn)
+                  then () else G.mk_edge{from=srcn,to=dstn} end)
+            all_edges;
+        (IGRAPH{graph=igraph,tnode=looktemp,gtemp=looknode,moves=allmoves},
+         lookliveout)
     end
   end
 end
