@@ -103,14 +103,23 @@ fun interferenceGraph
      * there is a newly define temp d, and temporaries
      * t1, ..., tn are in liveout set of node n. Then,
      * we add edge (d,t1), ..., (d,tn) to the igraph.
-     * Mappings between temps and igraph nodes are also recorded. *)
+     * Mappings between temps and igraph nodes are also recorded.
+     * The rules for adding interference edges are:
+     * 1. At any nonmove instruction that defines a variable a, where the
+     *   live-out variables are b1,...bj, add interference edges 
+     *   (a,b1),...,(a,bj).
+     * 2. At a move instruction a <- c, where variables b1,...,bj are live-out,
+     *   add interference edges (a,b1),...,(a,bj) for any bi that is not 
+     *   the same as c. *)
     let
 
       fun find_edges node : tempEdge list = 
         let
           val defset = look(def,node)
-          val outset = S.listItems(look(liveout,node))
-          fun f t = foldl (fn (t',l) => {src=t,dst=t'}::l) nil outset
+          val outlist = S.listItems(look(liveout,node))
+          fun f t = foldl (fn (t',l) =>  (* don't add self-edge *)
+                              if t <> t' then {src=t,dst=t'}::l else l)
+                          nil outlist
         in foldl (fn (t,l) => (f t) @ l) nil defset end
         
       val all_edges : tempEdge list = 
