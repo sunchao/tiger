@@ -76,5 +76,6 @@ struct
 
   fun nodename(g,i:int) = "n" ^ Int.toString(i)
 
+  fun compare ((_,n1),(_,n2)) = Int.compare(n1,n2)
 end
 
