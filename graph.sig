@@ -18,6 +18,9 @@ sig
     structure Table : TABLE 
     sharing type Table.key = node
 
+    (* for color.sml *)
+    val compare: (node * node) -> order
+
     val nodename: node->string  (* for debugging only *)
 
 end
