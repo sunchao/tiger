@@ -5,6 +5,8 @@ a membership flag. WE defined it here, but leave it for future improvement *)
 structure Color : COLOR = 
 struct 
 
+structure Frame = MipsFrame
+
 structure NS = ListSetFn(
   type ord_key = Graph.node
   fun compare (n1,n2) = Graph.compare(n1,n2))
@@ -16,10 +18,14 @@ structure MS = BinarySetFn(
           EQUAL => Graph.compare(n1',n2')
         | od => od)
 
-structure Frame = MipsFrame
+structure RS = ListSetFn(
+    type ord_key = Frame.register
+    fun compare (r1,r2) = String.compare(r1,r2))
+
 structure WL = NS
 structure GT = Graph.Table
 structure T = Temp
+
 
 exception NotEnoughRegister
 type allocation = Frame.register T.Table.table
@@ -31,11 +37,25 @@ fun color {interference = Liveness.IGRAPH{graph,tnode,gtemp,moves},
       val K = List.length registers
 
       val (precolorL, initialL) = 
-          let fun p node = 
-                  case T.Table.look (initAlloc,gtemp node) of
-                      SOME _ => true
-                    | NONE => false
-          in List.partition p (Graph.nodes graph) end
+          List.partition
+            (fn node => 
+                case T.Table.look (initAlloc,gtemp node) of
+                    SOME _ => true
+                  | NONE => false)
+            (Graph.nodes graph)
+
+      (* A map from a temp to its assigned register.
+       * Initially this only contain all precolored nodes *)
+      val colored = 
+          ref (List.foldl 
+                 (fn (n,tb) => 
+                     case T.Table.look (initAlloc,gtemp n) of
+                         SOME r => GT.enter(tb,n,r)
+                       | NONE => tb)
+                 GT.empty (Graph.nodes graph))
+
+      fun color (n:Graph.node) : Frame.register = 
+          let val SOME(m) = GT.look(!colored,n) in m end
 
       (* a mapping from a node to the list of moves it is associated with *)
       val moveList = 
@@ -68,22 +88,28 @@ fun color {interference = Liveness.IGRAPH{graph,tnode,gtemp,moves},
       val simplifyWL = ref WL.empty
       val freezeWL = ref WL.empty
       val spillWL = ref WL.empty
+
       val coalescedMS = ref MS.empty
       val constrainedMS = ref MS.empty
       val frozenMS = ref MS.empty
       val worklistMS = ref MS.empty
       val activeMS = ref MS.empty
 
-      val selectStack = ref nil
+
+      val spilledNS = ref NS.empty
       val coalescedNS = ref NS.empty
       val coloredNS = ref NS.empty
+
+      val selectStack = ref nil
 
       val degrees = 
           ref (List.foldl 
                  (fn (x,tb) => GT.enter(tb,x,List.length (Graph.adj x)))
                  GT.empty (Graph.nodes graph))
 
-
+          
+              
+      (* a map from nodes to their moves that are eligible for coalescing *)
       val nodeMoves =
           ref (List.foldl
                  (fn (n,tb) =>
@@ -96,7 +122,6 @@ fun color {interference = Liveness.IGRAPH{graph,tnode,gtemp,moves},
                                      (MS.union(!activeMS,!worklistMS)))))
                  GT.empty (Graph.nodes graph))
                                  
-
       fun addEdge (u,v) =
           if (not (MS.member(!adjSet,(u,v))) andalso
               (not (Graph.eq(u,v)))) then
@@ -119,6 +144,7 @@ fun color {interference = Liveness.IGRAPH{graph,tnode,gtemp,moves},
               else ()
             end
           else ()
+
 
       fun nodeMove (n) = let val SOME(m) = GT.look(!nodeMoves,n) in m end
 
@@ -198,7 +224,7 @@ fun color {interference = Liveness.IGRAPH{graph,tnode,gtemp,moves},
             !k < K
           end
               
-      fun getAlias (n) = 
+      fun getAlias (n) : Graph.node = 
           if NS.member(!coalescedNS,n) then
             let val SOME(m) = GT.look(!alias,n) in getAlias(m) end
           else n                   
@@ -256,6 +282,68 @@ fun color {interference = Liveness.IGRAPH{graph,tnode,gtemp,moves},
                 end)
             (!worklistMS)
 
+      fun freezeMoves (u) = 
+          MS.app
+            (fn (m) => 
+                let val (x,y) = m
+                    val v = if (Graph.eq(getAlias(y),getAlias(u)))
+                            then getAlias(x) else getAlias(y)
+                in activeMS := MS.delete(!activeMS,m);
+                   frozenMS := MS.add(!frozenMS,m);
+                   if (MS.isEmpty(nodeMove(v))) andalso 
+                      (degree v) > K then 
+                       (freezeWL := NS.delete(!freezeWL,v);
+                        simplifyWL := NS.add(!simplifyWL,v))
+                   else ()
+                end)
+            (nodeMove(u))
+            
+      fun freeze () =
+          let val v = List.hd(NS.listItems(!freezeWL)) in
+              freezeWL := NS.delete(!freezeWL,v);
+              simplifyWL := NS.add(!simplifyWL,v);
+              freezeMoves(v)
+          end
+
+      (* TODO: use spillCost to select *)
+      fun selectSpill () = 
+          let val m = List.hd(NS.listItems(!spillWL)) in
+              spillWL := NS.delete(!spillWL,m);
+              simplifyWL := NS.add(!simplifyWL,m);
+              freezeMoves(m)
+          end
+
+      (* TODO: make colored immutable *)
+      fun assignColors () = 
+          case !selectStack of
+              nil => ()
+            | n::ns => 
+              let
+                  val n_neighbors = 
+                      let val SOME(ks) = GT.look(!adjList,n) in ks end
+                  val ok_colors =
+                      NS.foldl 
+                        (fn (w,ocs) =>
+                            let val aw = getAlias(w) 
+                                val s = NS.union(!coloredNS,precolored) in
+                                if NS.member(s,aw) then
+                                    RS.delete(ocs,color(aw)) else ocs
+                                              
+                            end)
+                        (RS.addList(RS.empty,registers)) (n_neighbors)
+              in
+                  if RS.isEmpty(ok_colors) then
+                      spilledNS := NS.add(!spilledNS,n)
+                  else 
+                      (coloredNS := NS.add(!coloredNS,n);
+                       GT.enter(!colored,n,
+                                     List.hd(RS.listItems(ok_colors)))
+                       ;());
+                  NS.app
+                    (fn (n) => (GT.enter(!colored,n,color(getAlias(n)));()))
+                    (!coalescedNS)
+              end
+              
     in (Temp.Table.empty, nil)
     end
 
