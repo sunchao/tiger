@@ -2,7 +2,7 @@ signature MAKE_GRAPH =
 sig 
   val instrs2graph: Assem.instr list ->
                     Flow.flowgraph * Graph.node list
-  val show: TextIO.outstream * Flow.flowgraph -> unit
+  val show: TextIO.outstream * Flow.flowgraph * (Temp.temp -> string) -> unit
 end
 
 structure MakeGraph : MAKE_GRAPH = 
@@ -26,7 +26,7 @@ structure F = Flow
  * 
  *)
 
-fun show (out,F.FGRAPH{control,def,use,ismove}) = 
+fun show (out,F.FGRAPH{control,def,use,ismove},p) = 
     let 
       fun process1 node = 
           TextIO.output(out,
@@ -36,9 +36,9 @@ fun show (out,F.FGRAPH{control,def,use,ismove}) =
                         "] succ[" ^ (String.concatWith ", "
                         (map G.nodename (G.succ node))) ^
                         "] def[" ^ (String.concatWith ", "
-                        (map T.makestring (valOf(GT.look(def,node))))) ^
+                        (map p (valOf(GT.look(def,node))))) ^
                         "] use[" ^ (String.concatWith ", "
-                        (map T.makestring (valOf(GT.look(use,node))))) ^
+                        (map p (valOf(GT.look(use,node))))) ^
                         "] ismove=" ^ Bool.toString(valOf(GT.look(ismove,node)))
                         ^ "\n")
     in app process1 (G.nodes control) end
