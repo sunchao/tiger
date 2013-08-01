@@ -128,14 +128,17 @@ fun seq nil = T.EXP(T.CONST 0)
   | seq (st :: rest) = T.SEQ(st,seq(rest))
 
 (* for each incoming register parameter, move it to the place
-from which it is seem from within the function. This could be 
-a frame location (for escaping parameters) or a fresh temporary.*)
+ * from which it is seem from within the function. This could be 
+ * a frame location (for escaping parameters) or a fresh temporary.*)
 fun procEntryExit1 (frame,body) : T.stm = 
-    let val args = #instrs frame
-        val pairs = map (fn (r) => (allocLocal frame true,r)) (RA :: calleesaves)
-        val saves = map (fn (a,r) => T.MOVE(exp a (T.TEMP FP), T.TEMP r)) pairs
-        val restores = map (fn (a,r) => T.MOVE(T.TEMP r, exp a (T.TEMP FP))) pairs
-    in seq(args @ saves @ [body] @ restores)
+    let val args = #instrs frame 
+        val pairs = 
+            map (fn r => (allocLocal frame true,r)) (RA::callersaves)
+        val saves = 
+            map (fn (a,r) => T.MOVE(exp a (T.TEMP FP),T.TEMP r)) pairs
+        val restores =
+            map (fn (a,r) => T.MOVE(T.TEMP r,exp a (T.TEMP FP))) pairs
+    in seq(args @saves @ [body] @ restores)
     end
 
 fun procEntryExit2 (frame,body) = 
@@ -144,7 +147,6 @@ fun procEntryExit2 (frame,body) =
             src=[ZERO,RA,SP]@calleesaves,
             dst=[],jump=SOME[]}]
     
-
 fun procEntryExit3 ({name,formals,locals,instrs},body) =
     {prolog="PROCEDURE " ^ S.name name ^ "\n",
      body=body,epilog="END " ^ S.name name ^ "\n"}

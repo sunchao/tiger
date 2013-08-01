@@ -293,7 +293,8 @@ fun letexp (decs,body) =
 
 
 fun procEntryExit (Lev({frame,...},_),body) = 
-    let val body' = Frame.procEntryExit1(frame,T.MOVE(T.TEMP Frame.RV,unEx(body)))
+    let val body' = 
+            Frame.procEntryExit1(frame,T.MOVE(T.TEMP Frame.RV,unEx(body)))
     in fragments := Frame.PROC{frame=frame,body=body'} :: !fragments
     end
 end    

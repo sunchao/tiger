@@ -9,7 +9,7 @@ type allocation = Frame.register Temp.Table.table
 fun alloc (instrs,frame) : Assem.instr list * allocation =
     let val (graph,nodes) = MakeGraph.instrs2graph instrs
 	val (igraph,liveout) = Liveness.interferenceGraph graph
-	val (alloc,temps) = Color.color{interference=igraph,
+	val (alloc,temps) = SimpleColor.color{interference=igraph,
 					initial=Frame.tempMap,
 					spillCost=(fn _ => 1),
 					registers=Frame.registers}

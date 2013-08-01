@@ -343,7 +343,6 @@ fun color {interference = Liveness.IGRAPH{graph,tnode,gtemp,moves},
                     (fn (n) => (GT.enter(!colored,n,color(getAlias(n)));()))
                     (!coalescedNS)
               end
-              
     in (Temp.Table.empty, nil)
     end
 

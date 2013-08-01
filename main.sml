@@ -17,8 +17,8 @@ fun addtab instrs =
               A.MOVE{assem="\t"^assem,src=src,dst=dst}
         ) instrs
 
-fun tempname temp = 
-    case Temp.Table.look(Frame.tempMap,temp) of
+fun tempname alloc temp = 
+    case Temp.Table.look(alloc,temp) of
       SOME(r) => r
     | NONE => Temp.makestring temp
                        
@@ -31,17 +31,17 @@ fun emitproc out (F.PROC{body,frame}) =
         val _ = print "tree after canon:\n"
         val _ = app (fn s => Printtree.printtree(TextIO.stdOut,s)) stms'; 
 	      val instrs = List.concat(map (MipsGen.codegen frame) stms')
-        val {prolog,body,epilog} = Frame.procEntryExit3(frame,instrs)
-        val instrs' = addtab body
-        val format0 = Assem.format(tempname)
+        val (instrs',alloc) = RegAlloc.alloc(instrs,frame)
+        val {prolog,body,epilog} = Frame.procEntryExit3(frame,instrs')
+        val instrs'' = addtab body
+        val format0 = Assem.format(tempname alloc)
     in  
       TextIO.output(out,prolog);
-      app (fn i => TextIO.output(out,(format0 i) ^ "\n")) instrs';
+      app (fn i => TextIO.output(out,(format0 i) ^ "\n")) instrs'';
       TextIO.output(out,epilog)
     end
 
   | emitproc out (F.STRING(lab,s)) = TextIO.output(out,F.string(lab,s))
-
 
 fun withOpenFile fname f = 
     let val out = TextIO.openOut fname
