@@ -17,7 +17,6 @@ fun codegen (frame) (stm:Tree.stm) : Assem.instr list =
 
         val calldefs = nil
 
-        (* TODO: get rid of newline at end of each instr *)
         fun munchStm (T.SEQ(a,b)) = (munchStm(a); munchStm(b))
                                     
           | munchStm (T.LABEL lab) = 
@@ -67,22 +66,22 @@ fun codegen (frame) (stm:Tree.stm) : Assem.instr list =
 
           | munchStm (T.MOVE(T.TEMP i, 
                              T.MEM(T.BINOP(T.PLUS, e1, T.CONST n)))) =
-            emit(A.OPER{assem="li `d0, " ^ int2str n ^ "(`s0)",
+            emit(A.OPER{assem="lw `d0, " ^ int2str n ^ "(`s0)",
                         src=[munchExp e1],dst=[i],jump=NONE})
 
           | munchStm (T.MOVE(T.TEMP i, 
                              T.MEM(T.BINOP(T.PLUS, T.CONST n, e1)))) =
-            emit(A.OPER{assem="li `d0, " ^ int2str n ^ "(`s0)",
+            emit(A.OPER{assem="lw `d0, " ^ int2str n ^ "(`s0)",
                         src=[munchExp e1],dst=[i],jump=NONE})
 
           | munchStm (T.MOVE(T.TEMP i, 
                              T.MEM(T.BINOP(T.MINUS, e1, T.CONST n)))) =
-            emit(A.OPER{assem="li `d0, " ^ int2str (~n) ^ "(`s0)",
+            emit(A.OPER{assem="lw `d0, " ^ int2str (~n) ^ "(`s0)",
                         src=[munchExp e1],dst=[i],jump=NONE})
 
           | munchStm (T.MOVE(T.TEMP i, 
                              T.MEM(T.BINOP(T.MINUS, T.CONST n, e1)))) =
-            emit(A.OPER{assem="li `d0, " ^ int2str (~n) ^ "(`s0)",
+            emit(A.OPER{assem="lw `d0, " ^ int2str (~n) ^ "(`s0)",
                         src=[munchExp e1],dst=[i],jump=NONE})
 
           (* 3, move from register to register *)
@@ -387,12 +386,21 @@ fun codegen (frame) (stm:Tree.stm) : Assem.instr list =
         (* generate code to move all arguments to their correct positions.
          * In SPIM MIPS, we use a0-a3 to store first four parameters, and 
          * others go to frame. The result of this function is a list of 
-         * temporaries that are to be passed to the machine's CALL function *)
+         * temporaries that are to be passed to the machine's CALL
+         * function. Before assigning outgoing register arguments, we
+         * need first save contents in these registers to frame *)
         and munchArgs (_, nil) = nil
           | munchArgs (i, exp :: rest) = 
             let val len = List.length Frame.argregs in
               if i < len then
                 let val r = List.nth(Frame.argregs,i) in
+                  munchStm(
+                    T.MOVE(
+                      T.MEM(
+                        T.BINOP(T.PLUS,
+                                T.TEMP Frame.FP,
+                                T.CONST (i*Frame.wordSize))),
+                      T.TEMP r));
                   munchStm(T.MOVE(T.TEMP r,T.TEMP (munchExp(exp))));
                   r :: munchArgs(i+1,rest)
                 end

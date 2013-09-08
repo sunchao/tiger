@@ -19,8 +19,8 @@ fun addtab instrs =
 
 fun tempname alloc temp = 
     case Temp.Table.look(alloc,temp) of
-      SOME(r) => r
-    | NONE => Temp.makestring temp
+        SOME(r) => r
+      | NONE => Frame.temp_name temp
                        
 fun emitproc out (F.PROC{body,frame}) =
     let val _ = print ("emit " ^ Symbol.name (Frame.name frame) ^ "\n")
@@ -29,7 +29,7 @@ fun emitproc out (F.PROC{body,frame}) =
 	      val stms = Canon.linearize body
         val stms' = Canon.traceSchedule(Canon.basicBlocks stms)
         val _ = print "tree after canon:\n"
-        val _ = app (fn s => Printtree.printtree(TextIO.stdOut,s)) stms'; 
+        val _ = app (fn s => Printtree.printtree(TextIO.stdOut,s)) stms';
 	      val instrs = List.concat(map (MipsGen.codegen frame) stms')
         val (instrs',alloc) = RegAlloc.alloc(instrs,frame)
         val {prolog,body,epilog} = Frame.procEntryExit3(frame,instrs')

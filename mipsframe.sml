@@ -80,7 +80,7 @@ val tempMap = foldl
 
 fun temp_name t = 
     case TP.Table.look(tempMap,t) of 
-	SOME(r) => r
+	      SOME(r) => r
       | NONE => Temp.makestring t
 
 (* a list of all register name, which can be used for coloring *)               
@@ -104,9 +104,8 @@ fun newFrame {name: TP.label, formals: bool list} =
           if b then InFrame(offset)::iter(rest,offset+wordSize)
           else InReg(TP.newtemp())::iter(rest,offset)
       val accs : access list = iter(formals,0)
-      val instrs = map (fn (a,r) => T.MOVE(exp a (T.TEMP SP), T.TEMP r)) 
-                       (ListPair.zip(accs,argregs))
-    in {name=name,formals=accs,locals=ref 0,instrs=instrs} 
+      val instr = T.MOVE(T.TEMP FP, T.TEMP SP)
+    in {name=name,formals=accs,locals=ref 0,instrs=[instr]} 
     end
 
 fun name ({name,...}: frame) = name

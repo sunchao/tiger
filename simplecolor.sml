@@ -27,12 +27,16 @@ fun color {interference = Liveness.IGRAPH{graph,tnode,gtemp,moves},
     let 
         val K = List.length registers
                             
+        (* precolorTable is a mapping from temp to register,
+         * while initial is a list of uncolored nodes *)
         val (precolorTable, initial) = 
             List.foldl
               (fn (n,(pt,ini)) => 
-                  case TT.look (initAlloc,gtemp n) of
-                      SOME r => (TT.enter(pt,gtemp n,r),ini)
-                    | NONE => (pt,n::ini))
+                  let val t = gtemp n in
+                    case TT.look (initAlloc,t) of
+                        SOME r => (TT.enter(pt,t,r),ini)
+                      | NONE => (pt,n::ini)
+                  end)
               (TT.empty,[]) (Graph.nodes graph)
 
         (* A map from graph node to its degree *)
@@ -47,17 +51,24 @@ fun color {interference = Liveness.IGRAPH{graph,tnode,gtemp,moves},
         (* Create initial worklist *)
         fun makeWorklist initial = 
             List.filter (fn n => List.length (Graph.adj n) < K) initial
-            
+
         (* decrement degree for graph node n, return
          * modified degreeMap and a (possibly augmented) simplify worklist *)
         fun decrementDegree (n:Graph.node,
                              dm:int Graph.Table.table,
                              worklist:Graph.node list) =
-            let 
-              val d = degree (dm,n)
-              val dm' = GT.enter(dm,n,d-1) (* update n's degree *)
-            in if (d = K) then (dm',worklist@[n]) else (dm',worklist) end
-               
+            (* only decrement those non-precolored nodes - for *)
+            (* precolored nodes, we treat as if they have infinite *)
+            (* degree, since we shouldn't reassign them to different registers *)
+            let val t = gtemp n in
+              case TT.look(initAlloc,t) of
+                  SOME _ => (dm,worklist)
+                | NONE => 
+                  let 
+                    val d = degree (dm,n)
+                    val dm' = GT.enter(dm,n,d-1) (* update n's degree *)
+                  in if (d = K) then (dm',worklist@[n]) else (dm',worklist) end
+            end
             
         (* adjacenent nodes *)     
         fun adjacent n = Graph.adj n
