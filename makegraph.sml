@@ -1,34 +1,34 @@
-signature MAKE_GRAPH = 
-sig 
+signature MAKE_GRAPH =
+sig
   val instrs2graph: Assem.instr list ->
                     Flow.flowgraph * Graph.node list
   val show: TextIO.outstream * Flow.flowgraph * (Temp.temp -> string) -> unit
 end
 
-structure MakeGraph : MAKE_GRAPH = 
+structure MakeGraph : MAKE_GRAPH =
 struct
 
 structure T = Temp
 structure G = Graph
 structure GT = G.Table
 structure F = Flow
-(* 
+(*
  * Algorithm:
  * first pass: make node for each instr,
  * second pass: for each OPER instr, search in the instr list
- *  for a label that it jumps to, and make a new edge from the 
+ *  for a label that it jumps to, and make a new edge from the
  *  node of this instr to the node of the label.
  * third pass: connect all the nodes in sequential order (which
  *  are not connected by explicit jump in the original instr)
- * 
+ *
  * This is probably too inefficient, as it requires O(n^3) time.
- * But, I'll leave improvement for future. 
- * 
+ * But, I'll leave improvement for future.
+ *
  *)
 
-fun show (out,F.FGRAPH{control,def,use,ismove},p) = 
-    let 
-      fun process1 node = 
+fun show (out,F.FGRAPH{control,def,use,ismove},p) =
+    let
+      fun process1 node =
           TextIO.output(out,
                         (G.nodename node) ^ "\t" ^
                         "adj[" ^ (String.concatWith ", "
@@ -45,10 +45,10 @@ fun show (out,F.FGRAPH{control,def,use,ismove},p) =
 
 fun instrs2graph instrs =
     let
-      fun make_node((F.FGRAPH{control,def,use,ismove},nodelist), instr) = 
-          let val node = G.newNode control 
-              val (a,b,c) = 
-                  case instr of 
+      fun make_node((F.FGRAPH{control,def,use,ismove},nodelist), instr) =
+          let val node = G.newNode control
+              val (a,b,c) =
+                  case instr of
                     Assem.OPER{assem,dst,src,jump} => (dst,src,false)
                   | Assem.LABEL{assem,lab} => (nil,nil,false)
                   | Assem.MOVE{assem,dst,src} => ([dst],[src],true)
@@ -62,7 +62,7 @@ fun instrs2graph instrs =
           end
 
       (* we have to maintain the order of nodelist wrt instrs *)
-      val (igraph,nodelist) = 
+      val (igraph,nodelist) =
           foldl (fn (i,(ig,ns)) => make_node((ig,ns),i))
                 (F.FGRAPH{control=G.newGraph (),
                           def=GT.empty,
@@ -73,14 +73,14 @@ fun instrs2graph instrs =
 
       fun connect nil = ()
         | connect [x] = ()
-        | connect (x::(y::rest)) = 
+        | connect (x::(y::rest)) =
           (G.mk_edge{from=x,to=y}; connect (y::rest))
-          
-      fun do_jump(instr,node) = 
+
+      fun do_jump(instr,node) =
           let fun f l =
                   case List.find
-                           (fn (i,n) => 
-                               case i of 
+                           (fn (i,n) =>
+                               case i of
                                  Assem.LABEL{lab,...} => l = lab
                                | _ => false
                            ) complist of
@@ -89,10 +89,10 @@ fun instrs2graph instrs =
                Assem.OPER{jump=SOME(jlist),...} => (map f jlist; ())
              | _ => ()
           end
-          
+
     in
       map do_jump complist;
-      connect nodelist; 
+      connect nodelist;
       (igraph,nodelist)
     end
 end

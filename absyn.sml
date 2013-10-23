@@ -1,13 +1,13 @@
 (* $Id: absyn.sml,v 1.1 2012/10/17 15:21:17 csun Exp $ *)
-structure Absyn = 
+structure Absyn =
 struct
 
 type pos = int   and   symbol = Symbol.symbol
-                                
+
 datatype var = SimpleVar of symbol * pos
              | FieldVar of var * symbol * pos
              | SubscriptVar of var * exp * pos
-                               
+
      and exp = VarExp of var
              | NilExp
              | IntExp of int
@@ -25,7 +25,7 @@ datatype var = SimpleVar of symbol * pos
              | BreakExp of pos
              | LetExp of {decs: dec list, body: exp, pos: pos}
              | ArrayExp of {typ: symbol, size: exp, init: exp, pos: pos}
-                           
+
      and dec = FunctionDec of fundec list
              | VarDec of {name: symbol,
 		                  escape: bool ref,
@@ -33,21 +33,21 @@ datatype var = SimpleVar of symbol * pos
 		                  init: exp,
 		                  pos: pos}
              | TypeDec of {name: symbol, ty: ty, pos: pos} list
-                          
+
      and ty = NameTy of symbol * pos
             | RecordTy of field list
             | ArrayTy of symbol * pos
-                         
+
      and oper = PlusOp | MinusOp | TimesOp | DivideOp
               | EqOp | NeqOp | LtOp | LeOp | GtOp | GeOp
-                                                    
-withtype field = {name: symbol, escape: bool ref, 
+
+withtype field = {name: symbol, escape: bool ref,
 		          typ: symbol, pos: pos}
-                 
+
      and fundec = {name: symbol,
 		           params: field list,
 		           result: (symbol * pos) option,
 		           body: exp,
 		           pos: pos}
-                    
+
 end
