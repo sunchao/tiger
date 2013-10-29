@@ -45,7 +45,7 @@ fun show (out,F.FGRAPH{control,def,use,ismove},p) =
 
 fun instrs2graph instrs =
     let
-      fun make_node((F.FGRAPH{control,def,use,ismove},nodelist), instr) =
+      fun make_node ((F.FGRAPH{control,def,use,ismove},nodelist), instr) =
           let val node = G.newNode control
               val (a,b,c) =
                   case instr of
@@ -71,12 +71,16 @@ fun instrs2graph instrs =
 
       val complist = ListPair.zip (instrs, nodelist)
 
+      fun do_make_edge (from,to) =
+          if List.exists (fn n => G.eq(to,n)) (G.adj from)
+          then () else G.mk_edge{from=from,to=to}
+
       fun connect nil = ()
         | connect [x] = ()
         | connect (x::(y::rest)) =
-          (G.mk_edge{from=x,to=y}; connect (y::rest))
+          (do_make_edge(x,y); connect (y::rest))
 
-      fun do_jump(instr,node) =
+      fun do_jump (instr,node) =
           let fun f l =
                   case List.find
                            (fn (i,n) =>
@@ -84,7 +88,7 @@ fun instrs2graph instrs =
                                  Assem.LABEL{lab,...} => l = lab
                                | _ => false
                            ) complist of
-                    SOME((_,n)) => G.mk_edge{from=node,to=n}
+                    SOME((_,n)) => do_make_edge(node,n)
           in case instr of
                Assem.OPER{jump=SOME(jlist),...} => (map f jlist; ())
              | _ => ()
