@@ -142,7 +142,8 @@ fun transExp (venv,tenv,level,break) =
 
       | trexp (A.SeqExp(exps)) =
         let val es = map (fn (exp,_) => #exp (trexp exp)) exps
-            val ty = #ty (trexp (#1 (List.last exps)))
+            val ty = if List.null exps
+                     then T.UNIT else #ty (trexp (#1 (List.last exps)))
         in {exp=R.sequence(es),ty=ty} end
 
       | trexp (A.AssignExp{var,exp,pos}) =
@@ -179,16 +180,18 @@ fun transExp (venv,tenv,level,break) =
           {exp=R.loop(test_exp,body_exp,done_label),ty=T.UNIT}
         end
 
-      | trexp (A.BreakExp(_)) = {exp=R.break(break),ty=T.NIL}
+      | trexp (A.BreakExp(_)) = {exp=R.break(break),ty=T.UNIT}
 
       | trexp (A.LetExp{decs,body,pos}) =
         let
           val {venv=venv',tenv=tenv',exps=dexps} =
               foldl (fn (d,{venv,tenv,exps}) =>
-                        transDec(venv,tenv,level,exps,d,break))
+                        let val {venv=venv1,tenv=tenv1,exps=exps1} =
+                                transDec(venv,tenv,level,d,break)
+                        in {venv=venv1,tenv=tenv1,exps=exps@exps1} end)
                     {venv=venv,tenv=tenv,exps=nil} decs;
           val {exp=bexp,ty=bty} = transExp(venv',tenv',level,break) body
-        in {exp=R.letexp(dexps,bexp),ty=bty}
+          in {exp=R.letexp(dexps,bexp),ty=bty}
         end
 
       | trexp (A.ArrayExp{typ,size,init,pos}) =
@@ -227,49 +230,28 @@ fun transExp (venv,tenv,level,break) =
                  escape=ref false,
                  typ=NONE,
                  init=hi,
-                 pos=pos
-               }
-              ]
+                 pos=pos}]
+
           val loop =
               A.WhileExp{
-                test=A.IntExp(1),
-                body=A.IfExp{
-                  test=A.OpExp{
+                test=A.OpExp{
                     left=A.VarExp(ivar),
-                    oper=A.LtOp,
+                    oper=A.LeOp,
                     right=A.VarExp(limitvar),
                     pos=pos
                   },
-                  then'=A.AssignExp{
-                    var=ivar,
-                    exp=A.OpExp{
-                      left=A.VarExp(ivar),
-                      oper=A.PlusOp,
-                      right=A.IntExp(1),
-                      pos=pos
-                    },
-                    pos=pos
-                  },
-                  else'=SOME(A.BreakExp pos),
-                  pos=pos
-                },
-                pos=pos
-              }
-
-          val letbody =
-              A.IfExp{
-                test=A.OpExp{
-                  left=A.VarExp(ivar),
-                  oper=A.LeOp,
-                  right=A.VarExp(limitvar),
-                  pos=pos
-                },
-                then'=loop,
-                else'=NONE,
-                pos=pos
-              }
+                body=A.SeqExp[(body,pos),
+                              (A.AssignExp{
+                                var=ivar,
+                                exp=A.OpExp{
+                                  left=A.VarExp(ivar),
+                                  oper=A.PlusOp,
+                                  right=A.IntExp(1),
+                                  pos=pos
+                              },pos=pos},pos)],
+                pos=pos}
         in
-          trexp (A.LetExp{decs=letdecs,body=letbody,pos=pos})
+          trexp (A.LetExp{decs=letdecs,body=loop,pos=pos})
         end
 
       | trexp (A.CallExp{func,args,pos}) =
@@ -355,7 +337,7 @@ fun transExp (venv,tenv,level,break) =
     in trexp
     end
 
-and transDec (venv,tenv,level,exps,A.VarDec{name,escape,typ,init,pos},break) =
+and transDec (venv,tenv,level,A.VarDec{name,escape,typ,init,pos},break) =
     let
       val {exp,ty} = transExp(venv,tenv,level,break) init
       val acc = Translate.allocLocal(level)(!escape)
@@ -366,7 +348,7 @@ and transDec (venv,tenv,level,exps,A.VarDec{name,escape,typ,init,pos},break) =
         (if (ty = T.NIL) then (err pos "can't use nil") else ();
          {tenv=tenv,
           venv=S.enter(venv,name,E.VarEntry{access=acc,ty=ty}),
-          exps=R.assign(varexp,exp) :: exps})
+          exps=[R.assign(varexp,exp)]})
 
       | SOME((tname,pos)) =>
         case S.look (tenv,tname) of
@@ -374,14 +356,15 @@ and transDec (venv,tenv,level,exps,A.VarDec{name,escape,typ,init,pos},break) =
           (err pos ("type " ^ S.name tname ^ " not found");
            {tenv=tenv,
             venv=S.enter(venv,name,E.VarEntry{access=acc,ty=ty}),
-            exps=exps})
+            exps=[]})
 
         | SOME(dty) =>
-          let val at = actual_ty(dty,pos) in
+          let
+            val at = actual_ty(dty,pos) in
             checktype(dty,ty,pos);
             {tenv=tenv,
              venv=S.enter(venv,name,E.VarEntry{access=acc,ty=at}),
-             exps=R.assign(varexp,exp) :: exps}
+             exps=[R.assign(varexp,exp)]}
           end
     end
 
@@ -389,7 +372,7 @@ and transDec (venv,tenv,level,exps,A.VarDec{name,escape,typ,init,pos},break) =
    *  we need two steps: first fill the tenv with
    *  "empty" headers, then pass the tenv to
    *  transTy and get the values  *)
-  | transDec (venv,tenv,level,exps,A.TypeDec(tdecs),break) =
+  | transDec (venv,tenv,level,A.TypeDec(tdecs),break) =
     let
       val tenv' =
         foldl (fn ({name,...},env) =>
@@ -428,7 +411,7 @@ and transDec (venv,tenv,level,exps,A.VarDec{name,escape,typ,init,pos},break) =
      * a array or record *)
     in checkeach(tdecs);
        checkdup(map #name tdecs,map #pos tdecs);
-       {venv=venv, tenv=tenv'',exps=exps}
+       {venv=venv, tenv=tenv'',exps=nil}
     end
 
   (* Things to check for a function:
@@ -436,7 +419,7 @@ and transDec (venv,tenv,level,exps,A.VarDec{name,escape,typ,init,pos},break) =
      2. formal type exists and match,
      3. no duplicate formal names,
      4. body type checks. *)
-  | transDec (venv,tenv,level,exps,A.FunctionDec(fundecs),break) =
+  | transDec (venv,tenv,level,A.FunctionDec(fundecs),break) =
     let
       (* first pass on a fundec, check formal types,
        * and store header info in the venv. *)
@@ -524,18 +507,17 @@ and transTy (tenv,A.NameTy(sym,pos)) =
     | NONE => (err pos ("undefined type " ^ S.name sym);
                T.ARRAY(T.NIL,ref()))
 
-(* TODO: change return value *)
 fun transProg(exp:Absyn.exp) =
     let
-      val _ = Translate.reset() (* clear fragment list *)
+      val _ = R.reset() (* clear fragment list *)
       val mainlevel =
-          Translate.newLevel{parent=Translate.outermost,
+          R.newLevel{parent=R.outermost,
                              name=Temp.namedlabel "main",
                              formals=[]}
       val {exp,ty} =
           transExp(E.base_venv,E.base_tenv,mainlevel,Temp.newlabel())(exp)
     in
-      Translate.procEntryExit(mainlevel,exp);
-      Translate.getResult()
+      R.procEntryExit(mainlevel,exp);
+      R.getResult()
     end
 end
