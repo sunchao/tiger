@@ -1,10 +1,11 @@
 Group is
 
+testcoloring.sml
 testliveness.sml
 main.sml
 regalloc.sml
 regalloc.sig
-color.sml
+simplecolor.sml
 color.sig
 liveness.sml
 makegraph.sml
@@ -36,7 +37,7 @@ table.sml
 table.sig
 symbol.sml
 parse.sml
-tiger.lex
+tiger-appel.lex.sml
 tiger.grm
 $/basis.cm
 $/smlnj-lib.cm
