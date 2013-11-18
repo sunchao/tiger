@@ -24,18 +24,13 @@ fun tempname alloc temp =
 
 fun emitproc out (F.PROC{body,frame}) =
     let val _ = print ("emit " ^ Symbol.name (Frame.name frame) ^ "\n")
-        val _ = print "tree before canon:\n";
-        val _ = Printtree.printtree(TextIO.stdOut,body);
 	      val stms = Canon.linearize body
         val stms' = Canon.traceSchedule(Canon.basicBlocks stms)
-        val _ = print "tree after canon:\n"
-        val _ = app (fn s => Printtree.printtree(TextIO.stdOut,s)) stms';
 	      val instrs = List.concat(map (MipsGen.codegen frame) stms')
-        val _ = print "before reg alloc:\n"
-        val format1 = Assem.format(Temp.makestring)
-        (* val _ = app (fn i => TextIO.output(TextIO.stdOut,(format1 i) ^ "\n")) instrs *)
-        val (instrs',alloc) = RegAlloc.alloc(instrs,frame)
-        val {prolog,body,epilog} = Frame.procEntryExit3(frame,instrs')
+        val instrs2 = Frame.procEntryExit2 (frame,instrs)
+        val format1 = Assem.format(Frame.temp_name)
+        val (instrs2',alloc) = RegAlloc.alloc(instrs2,frame)
+        val {prolog,body,epilog} = Frame.procEntryExit3(frame,instrs2')
         val instrs'' = addtab body
         val format0 = Assem.format(tempname alloc)
     in
@@ -56,7 +51,7 @@ fun withOpenFile fname f =
 
 fun compile filename =
     let val absyn = Parse.parse filename
-        val _ = PrintAbsyn.print(TextIO.stdOut,absyn)
+        val _ = PrintAbsyn.print (TextIO.stdOut, absyn)
         val frags = (FindEscape.findEscape absyn;
                      Semant.transProg absyn)
         val (progs,strs) =
@@ -75,4 +70,7 @@ fun compile filename =
                          app (emitproc out) progs
                        end)
     end
+
+fun main (cmd: string, args: string list) =
+    let in app compile args; 0 end
 end
