@@ -46,7 +46,9 @@ fun show (output,IGRAPH{graph,tnode,gtemp,moves},p) =
 	    val node2str = p o gtemp
 	    fun process1 node =
 	        TextIO.output(output,
-			                  ((node2str node) ^ " -> {" ^
+			                  ((node2str node) ^ " -> (" ^
+                         Int.toString(List.length(Graph.adj node)) ^
+                         ") {" ^
 			                   (String.concatWith
 				                    ", "
 				                    (map node2str (Graph.adj node))) ^ "}\n"))
@@ -66,11 +68,11 @@ fun interferenceGraph
           "{" ^
           (String.concatWith
              ", "
-             (map Temp.makestring (S.listItems set))) ^ "}"
+             (map Frame.temp_name (S.listItems set))) ^ "}"
 
       fun println s = print(s ^ "\n")
 
-      (* iteratively compute liveSet, until reaches a fix point *)
+      (* recursively compute liveSet, until reaches a fix point *)
       fun iter (livein_map,liveout_map) =
           let
             (* Record whether we've reached a fix point *)
@@ -108,6 +110,7 @@ fun interferenceGraph
 
       (* A map from a graph node to its liveout set *)
       val liveout : liveMap = iter ((make_empty_map ()), (make_empty_map ()))
+
     in
       (* now for each node n in the flow graph, suppose
        * there is a newly define temp d, and temporaries
@@ -135,7 +138,10 @@ fun interferenceGraph
         val all_edges : tempEdge list =
             foldl (fn (n,l) => find_edges(n) @ l) nil allnodes
 
-        fun make_table tlist =
+        val all_temps : Temp.temp list =
+            foldl (fn (n,acc) => acc @ look(def,n) @ look(use,n)) nil allnodes
+
+        fun make_table temp_list =
             foldl
               (fn (t,(t2n,n2t)) =>
                   case TT.look(t2n,t) of
@@ -143,10 +149,9 @@ fun interferenceGraph
                     | NONE =>
                       let val n = Graph.newNode(igraph) in
                         (TT.enter(t2n,t,n),GT.enter(n2t,n,t)) end
-              ) (TT.empty,GT.empty) tlist
+              ) (TT.empty,GT.empty) temp_list
 
-        val (temp2node,node2temp) =
-            make_table ((map #src all_edges) @ (map #dst all_edges))
+        val (temp2node,node2temp) = make_table all_temps
 
         fun looktemp (t: T.temp) : G.node = valOf(TT.look(temp2node,t))
 
