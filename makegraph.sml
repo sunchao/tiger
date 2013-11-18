@@ -75,10 +75,14 @@ fun instrs2graph instrs =
           if List.exists (fn n => G.eq(to,n)) (G.adj from)
           then () else G.mk_edge{from=from,to=to}
 
+      (* only connect x with y if x doesn't jump. *)
       fun connect nil = ()
-        | connect [x] = ()
-        | connect (x::(y::rest)) =
-          (do_make_edge(x,y); connect (y::rest))
+        | connect [(i,x)] = ()
+        | connect ((i1,x)::((i2,y)::rest)) =
+          (case i1 of
+               Assem.OPER{jump=SOME j,...} => ()
+             | _ => do_make_edge(x,y);
+           connect ((i2,y)::rest))
 
       fun do_jump (instr,node) =
           let fun f l =
@@ -96,7 +100,7 @@ fun instrs2graph instrs =
 
     in
       map do_jump complist;
-      connect nodelist;
+      connect complist;
       (igraph,nodelist)
     end
 end
