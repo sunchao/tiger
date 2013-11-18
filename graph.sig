@@ -2,7 +2,7 @@ signature GRAPH =
 sig
     type graph
     type node
-    
+
     val nodes: graph -> node list
     val succ: node -> node list
     val pred: node -> node list
@@ -15,7 +15,7 @@ sig
     val mk_edge: {from: node, to: node} -> unit
     val rm_edge: {from: node, to: node} -> unit
 
-    structure Table : TABLE 
+    structure Table : TABLE
     sharing type Table.key = node
 
     (* for color.sml *)
