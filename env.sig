@@ -1,4 +1,4 @@
-signature ENV = 
+signature ENV =
 sig
     (* type access *)
     type ty
