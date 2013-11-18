@@ -12,6 +12,7 @@ sig
   val string : Tree.label * string -> string
 
   val FP: Temp.temp
+  val SP: Temp.temp
   val RV: Temp.temp (* for return value *)
   val RA: Temp.temp
   val wordSize: int
@@ -22,7 +23,6 @@ sig
 
   val registers : register list
 
-  (* TODO: hide these *)
   val argregs : Temp.temp list
   val callersaves : Temp.temp list
   val calleesaves : Temp.temp list
