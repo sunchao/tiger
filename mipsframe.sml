@@ -73,8 +73,7 @@ val reglist =
      ("$t4",t4),("$t5",t5),("$t6",t6),("$t7",t7),
      ("$s0",s0),("$s1",s1),("$s2",s2),("$s3",s3),
      ("$s4",s4),("$s5",s5),("$s6",s6),("$s7",s7),
-     ("$t8",t8),("$t9",t9),("$gp",GP),("$fp",FP),
-     ("$v0",RV),("$sp",SP),("$ra",RA)]
+     ("$fp",FP),("$v0",RV),("$sp",SP),("$ra",RA)]
 
 
 val tempMap = foldl
@@ -87,7 +86,7 @@ fun temp_name t =
 
 (* a list of all register name, which can be used for coloring *)
 val registers = map (fn (x) => case TP.Table.look(tempMap,x) of
-                        SOME(r) => r) (argregs @ calleesaves @ callersaves)
+                        SOME(r) => r) (argregs @ callersaves @ calleesaves)
 
 fun string (label, str) : string =
     S.name label ^ ": .asciiz \"" ^ str ^ "\"\n"
@@ -137,9 +136,10 @@ fun seq nil = T.EXP(T.CONST 0)
 fun procEntryExit1 (frame,body) : T.stm =
   let
     val args = #instrs frame
-    val pairs =  map (fn r => (allocLocal frame true,r)) (RA::calleesaves)
+    val pairs =  map (fn r => (allocLocal frame false,r)) (RA::calleesaves)
     val saves = map (fn (a,r) => T.MOVE(exp a (T.TEMP FP),T.TEMP r)) pairs
-    val restores = map (fn (a,r) => T.MOVE(T.TEMP r,exp a (T.TEMP FP))) pairs
+    val restores = map (fn (a,r) => T.MOVE(T.TEMP r,exp a (T.TEMP FP)))
+                       (List.rev pairs)
   in seq(args @saves @ [body] @ restores) end
 
 fun procEntryExit2 (frame,body) =
