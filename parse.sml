@@ -1,5 +1,5 @@
 structure Parse : sig val parse : string -> Absyn.exp end =
-struct 
+struct
   structure TigerLrVals = TigerLrValsFun(structure Token = LrParser.Token)
   structure Lex = TigerLexFun(structure Tokens = TigerLrVals.Tokens)
   structure TigerP = Join(structure ParserData = TigerLrVals.ParserData
@@ -17,6 +17,3 @@ struct
       end handle LrParser.ParseError => raise ErrorMsg.Error
 
 end
-
-
-
