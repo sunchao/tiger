@@ -1,4 +1,4 @@
-signature CANON = 
+signature CANON =
 sig
     val linearize : Tree.stm -> Tree.stm list
         (* From an arbitrary Tree statement, produce a list of cleaned trees
@@ -31,7 +31,7 @@ sig
          *)
 end
 
-structure Canon : CANON = 
+structure Canon : CANON =
 struct
 
   structure T = Tree
@@ -73,36 +73,36 @@ struct
 		 	 in stms % build(el')
 			end
 
-  and do_stm(T.SEQ(a,b)) = 
+  and do_stm(T.SEQ(a,b)) =
                do_stm a % do_stm b
-    | do_stm(T.JUMP(e,labs)) = 
+    | do_stm(T.JUMP(e,labs)) =
 	       reorder_stm([e],fn [e] => T.JUMP(e,labs))
-    | do_stm(T.CJUMP(p,a,b,t,f)) = 
+    | do_stm(T.CJUMP(p,a,b,t,f)) =
                reorder_stm([a,b], fn[a,b]=> T.CJUMP(p,a,b,t,f))
-    | do_stm(T.MOVE(T.TEMP t,T.CALL(e,el))) = 
+    | do_stm(T.MOVE(T.TEMP t,T.CALL(e,el))) =
                reorder_stm(e::el,fn e::el => T.MOVE(T.TEMP t,T.CALL(e,el)))
-    | do_stm(T.MOVE(T.TEMP t,b)) = 
+    | do_stm(T.MOVE(T.TEMP t,b)) =
 	       reorder_stm([b],fn[b]=>T.MOVE(T.TEMP t,b))
-    | do_stm(T.MOVE(T.MEM e,b)) = 
+    | do_stm(T.MOVE(T.MEM e,b)) =
 	       reorder_stm([e,b],fn[e,b]=>T.MOVE(T.MEM e,b))
-    | do_stm(T.MOVE(T.ESEQ(s,e),b)) = 
+    | do_stm(T.MOVE(T.ESEQ(s,e),b)) =
 	       do_stm(T.SEQ(s,T.MOVE(e,b)))
-    | do_stm(T.EXP(T.CALL(e,el))) = 
+    | do_stm(T.EXP(T.CALL(e,el))) =
 	       reorder_stm(e::el,fn e::el => T.EXP(T.CALL(e,el)))
-    | do_stm(T.EXP e) = 
+    | do_stm(T.EXP e) =
 	       reorder_stm([e],fn[e]=>T.EXP e)
     | do_stm s = reorder_stm([],fn[]=>s)
 
-  and do_exp(T.BINOP(p,a,b)) = 
+  and do_exp(T.BINOP(p,a,b)) =
                  reorder_exp([a,b], fn[a,b]=>T.BINOP(p,a,b))
-    | do_exp(T.MEM(a)) = 
+    | do_exp(T.MEM(a)) =
 		 reorder_exp([a], fn[a]=>T.MEM(a))
-    | do_exp(T.ESEQ(s,e)) = 
+    | do_exp(T.ESEQ(s,e)) =
 		 let val stms = do_stm s
 		     val (stms',e) = do_exp e
 		  in (stms%stms',e)
 		 end
-    | do_exp(T.CALL(e,el)) = 
+    | do_exp(T.CALL(e,el)) =
 		 reorder_exp(e::el, fn e::el => T.CALL(e,el))
     | do_exp e = reorder_exp([],fn[]=>e)
 
@@ -117,10 +117,10 @@ struct
   type block = T.stm list
 
   (* Take list of statements and make basic blocks satisfying conditions
-       3 and 4 above, in addition to the extra condition that 
+       3 and 4 above, in addition to the extra condition that
       every block ends with a JUMP or CJUMP *)
 
-  fun basicBlocks stms = 
+  fun basicBlocks stms =
      let val done = Temp.newlabel()
          fun blocks((head as T.LABEL _) :: tail, blist) =
 	     let fun next((s as (T.JUMP _))::rest, thisblock) =
@@ -130,12 +130,12 @@ struct
 		   | next(stms as (T.LABEL lab :: _), thisblock) =
          next(T.JUMP(T.NAME lab,[lab]) :: stms, thisblock)
 		   | next(s::rest, thisblock) = next(rest, s::thisblock)
-		   | next(nil, thisblock) = 
+		   | next(nil, thisblock) =
 			     next([T.JUMP(T.NAME done, [done])], thisblock)
-		 
-		 and endblock(stms, thisblock) = 
+
+		 and endblock(stms, thisblock) =
 		            blocks(stms, rev thisblock :: blist)
-		     
+
 	     in next(tail, [head])
 	     end
 	   | blocks(nil, blist) = rev blist
@@ -149,7 +149,7 @@ struct
   fun splitlast([x]) = (nil,x)
     | splitlast(h::t) = let val (t',last) = splitlast t in (h::t', last) end
 
-  fun trace(table,b as (T.LABEL lab :: _),rest) = 
+  fun trace(table,b as (T.LABEL lab :: _),rest) =
    let val table = Symbol.enter(table, lab, nil)
     in case splitlast b
      of (most,T.JUMP(T.NAME lab, _)) =>
@@ -159,24 +159,24 @@ struct
       | (most,T.CJUMP(opr,x,y,t,f)) =>
           (case (Symbol.look(table,t), Symbol.look(table,f))
             of (_, SOME(b' as _::_)) => b @ trace(table, b', rest)
-             | (SOME(b' as _::_), _) => 
+             | (SOME(b' as _::_), _) =>
 		           most @ [T.CJUMP(T.notRel opr,x,y,f,t)]
 		                @ trace(table, b', rest)
              | _ => let val f' = Temp.newlabel()
-		     in most @ [T.CJUMP(opr,x,y,t,f'), 
+		     in most @ [T.CJUMP(opr,x,y,t,f'),
 				T.LABEL f', T.JUMP(T.NAME f,[f])]
 			     @ getnext(table,rest)
                         end)
       | (most, T.JUMP _) => b @ getnext(table,rest)
      end
 
-  and getnext(table,(b as (T.LABEL lab::_))::rest) = 
+  and getnext(table,(b as (T.LABEL lab::_))::rest) =
            (case Symbol.look(table, lab)
              of SOME(_::_) => trace(table,b,rest)
               | _ => getnext(table,rest))
     | getnext(table,nil) = nil
 
-  fun traceSchedule(blocks,done) = 
+  fun traceSchedule(blocks,done) =
        getnext(foldr enterblock Symbol.empty blocks, blocks)
          @ [T.LABEL done]
 
