@@ -48,7 +48,6 @@ fun allocLocal lev escape =
     case lev of
       Lev({parent=_,frame=frame},_) => (lev,Frame.allocLocal frame escape)
 
-
 fun seq stmlist =
     case stmlist of
       [s] => s
@@ -135,18 +134,18 @@ fun memplus (e1:T.exp,e2:T.exp) = T.MEM(T.BINOP(T.PLUS,e1,e2))
  * (the level within the variable's access) *)
 fun simpleVar (access,level): exp =
     let val (Lev(_,defref),defaccess) = access
-        fun iter (curlevel) =
+        fun iter (curlevel, acc) =
             let val Lev({parent,frame},curref) = curlevel
             in if (defref = curref) then
-                 Frame.exp(defaccess)(T.TEMP(Frame.FP))
-               else
-                 let val staticlink = hd(Frame.formals frame)
-                 in Frame.exp(staticlink)(iter(parent)) end
+                 Frame.exp(defaccess)(acc)
+               else let val staticlink = hd(Frame.formals frame)
+                    in iter(parent,Frame.exp(staticlink)(acc))
+                    end
             end
-    in Ex(iter(level)) end
+    in Ex(iter(level,T.TEMP(Frame.FP))) end
 
 fun subscriptVar (base,offset): exp =
-    Ex(memplus(T.MEM(unEx(base)),
+    Ex(memplus(unEx(base),
                T.BINOP(T.MUL,unEx(offset),T.CONST(Frame.wordSize))))
 
 fun fieldVar (base,id,flist) : exp =
@@ -154,7 +153,7 @@ fun fieldVar (base,id,flist) : exp =
     let fun findindex (index,elem,list) =
             if elem = hd(list) then index
             else findindex(index+1,elem,tl(list)) in
-      Ex(memplus(T.MEM(unEx(base)),
+      Ex(memplus(unEx(base),
                  T.BINOP(T.MUL,T.CONST(findindex(0,id,flist)),
                                     T.CONST(Frame.wordSize))))
     end
@@ -163,48 +162,47 @@ fun fieldVar (base,id,flist) : exp =
  * result must be unit, and thus we return CONST(0) *)
 fun ifelse (testexp,thenexp,elseexp: exp option) : exp =
     let
-      val r = Temp.newtemp()
+      val r = Temp.newtemp() (* hold result *)
       val t = Temp.newlabel()
       val f = Temp.newlabel()
       val finish = Temp.newlabel()
       val testfun  = unCx(testexp) in
       case thenexp of
-        Ex(e) =>
-        (case elseexp of
-          SOME(exp) => (* not possible *)
-          Ex(T.ESEQ(seq[testfun(t,f),
-                        T.LABEL t, T.MOVE(T.TEMP r, unEx(thenexp)),
-                        T.JUMP (T.NAME finish, [finish]),
-                        T.LABEL f, T.MOVE(T.TEMP r, unEx(exp)),
-                        T.JUMP (T.NAME finish, [finish]),
-                        T.LABEL finish],
-                    T.TEMP r)))
-      | Nx(thenstm) =>
-        (case elseexp of
-          NONE =>
-          Nx(seq[testfun(t,f),
-                 T.LABEL t, thenstm,
-                 T.LABEL f])
-        | SOME(Nx(elsestm)) => (* must be a statement *)
-          Nx(seq[testfun(t,f),
-                 T.LABEL t, thenstm,
-                 T.JUMP (T.NAME finish, [finish]),
-                 T.LABEL f, elsestm,
-                 T.JUMP (T.NAME finish, [finish]),
-                 T.LABEL finish]))
-      | Cx(cf) => (* TODO: fix this *)
-        let val z = Temp.newlabel() in
-          case elseexp of
-            SOME(Ex(exp)) =>
-            Ex(T.ESEQ(seq[testfun(z,f),
-                          T.LABEL z, cf(t,f),
-                          T.LABEL t, T.MOVE(T.TEMP r, T.CONST(1)),
-                          T.JUMP (T.NAME finish, [finish]),
-                          T.LABEL f, T.MOVE(T.TEMP r, T.CONST(0)),
-                          T.JUMP (T.NAME finish, [finish]),
-                          T.LABEL finish],
-                      T.TEMP r))
-        end
+          Ex(e) =>
+          (case elseexp of
+              SOME(e') => (* Nx possible? *)
+              Ex(T.ESEQ(seq[testfun(t,f),
+                            T.LABEL t, T.MOVE(T.TEMP r, e),
+                            T.JUMP (T.NAME finish, [finish]),
+                            T.LABEL f, T.MOVE(T.TEMP r, unEx(e')),
+                            T.JUMP (T.NAME finish, [finish]),
+                            T.LABEL finish],
+                        T.TEMP r)))
+        | Nx(thenstm) =>
+          (case elseexp of
+               NONE =>
+               (print("GET HERE 2\n");
+                Nx(seq[testfun(t,f),
+                       T.LABEL t, thenstm,
+                       T.LABEL f]))
+             | SOME(st) => (* must be a statement *)
+               Nx(seq[testfun(t,f),
+                      T.LABEL t, thenstm,
+                      T.JUMP (T.NAME finish, [finish]),
+                      T.LABEL f, unNx(st),
+                      T.JUMP (T.NAME finish, [finish]),
+                      T.LABEL finish]))
+        | Cx(cf) => (* TODO: fix this *)
+          let val z = Temp.newlabel ()
+              val _ = print("GET HERE 3\n")
+          in
+            case elseexp of
+                SOME(e) =>
+                Cx(fn(t',f') =>
+                      seq[testfun(t,f),
+                          T.LABEL t, cf(t',f'),
+                          T.LABEL f, (unCx e)(t',f')])
+          end
     end
 
 (* creating a record (see page 164) *)
@@ -248,13 +246,15 @@ fun loop (test, body, done_label) =
 
 fun break (label) : exp = Nx(T.JUMP(T.NAME label, [label]))
 
-exception NotPossible
+fun call (_,Lev({parent=Top,...},_),label,exps,isprocedure) : exp = (* external call *)
+    if isprocedure
+    then Nx(T.EXP(F.externalCall(Symbol.name label,map unEx exps)))
+    else Ex(F.externalCall(Symbol.name label,map unEx exps))
 
-fun call (uselevel,deflevel,label,exps,isprocedure) : exp =
-    (* find the difference of static nesting depth
-     * between uselevel and deflevel *)
+  | call (uselevel,deflevel,label,exps,isprocedure) : exp =
+    (* find the difference
+     * of static nesting depth between uselevel and deflevel *)
     let
-      val tree_exps = map (fn (e) => unEx(e)) exps
       fun depth level =
             case level of
               Top => 0
@@ -266,14 +266,16 @@ fun call (uselevel,deflevel,label,exps,isprocedure) : exp =
             let val Lev({parent,frame},_) = curlevel in
               Frame.exp(hd(Frame.formals frame))(iter(d-1,parent))
             end
-      val call = T.CALL(T.NAME label, (iter(diff,uselevel)) :: tree_exps)
-    in if isprocedure then Nx(T.EXP(call)) else Ex(call)
+      val call = T.CALL(T.NAME label,(iter(diff,uselevel)) :: (map unEx exps))
+    in if isprocedure
+       then Nx(T.EXP(call)) else Ex(call)
     end
 
-(* result is the last exp *)
+(* result is the last exp. note that the last sequence
+ * might be a statement, which makes the whole sequence statement. *)
 fun sequence (exps: exp list) =
-    let val len = List.length exps in
-      if len = 0 then Ex(T.CONST 0)
+    let val len = length exps in
+      if len = 0 then Nx(T.EXP(T.CONST 0)) (* () is a statement *)
       else if len = 1 then hd(exps)
       else
         let val first = seq(map unNx (List.take(exps,length(exps)-1)))
