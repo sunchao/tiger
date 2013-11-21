@@ -28,31 +28,26 @@ structure T = Temp
 
 type allocation = Frame.register TT.table
 
-
-val simplifyWL : Graph.node list ref = ref nil
-val freezeWL : Graph.node list ref = ref nil
-val spillWL : Graph.node list ref = ref nil
-
-val coalescedMS = ref MS.empty
-val constrainedMS = ref MS.empty
-val frozenMS = ref MS.empty
-val worklistMS = ref MS.empty
-val activeMS = ref MS.empty
-
-val spillNS = ref NS.empty
-val coalescedNS = ref NS.empty
-val coloredNS = ref NS.empty
-
-val selectStack : Graph.node list ref = ref nil
-val colorTable : allocation ref = ref TT.empty
-
-
-fun remove l n = List.filter (fn (x) => not (Graph.eq(x,n))) l
-
 (* coloring function *)
 fun color {interference = Liveness.IGRAPH{graph,tnode,gtemp,moves},
            initial=initAlloc, spillCost, registers} =
     let
+      val simplifyWL : Graph.node list ref = ref nil
+      val freezeWL : Graph.node list ref = ref nil
+      val spillWL : Graph.node list ref = ref nil
+      val coalescedMS = ref MS.empty
+      val constrainedMS = ref MS.empty
+      val frozenMS = ref MS.empty
+      val worklistMS = ref MS.empty
+      val activeMS = ref MS.empty
+      val spillNS = ref NS.empty
+      val coalescedNS = ref NS.empty
+      val coloredNS = ref NS.empty
+      val selectStack : Graph.node list ref = ref nil
+      val colorTable : allocation ref = ref TT.empty
+
+      fun remove l n = List.filter (fn (x) => not (Graph.eq(x,n))) l
+
       (* # of colors available *)
       val K = List.length registers
 
@@ -67,7 +62,6 @@ fun color {interference = Liveness.IGRAPH{graph,tnode,gtemp,moves},
                       | NONE => (pt,n::ini)
                   end)
               (TT.empty,[]) (Graph.nodes graph)
-
 
       (* A map from graph nodes to their *initial* degree *)
       val degreeMap : int GT.table ref =
@@ -110,11 +104,11 @@ fun color {interference = Liveness.IGRAPH{graph,tnode,gtemp,moves},
 
       (* simplify the graph by keep removing the first node from simplify
        * worklist and add to select stack. At same time, decrement degree
-       * for adjacent nodes of the removed node. *)
+       * for adjacent nodes of the removed node.
+       * precondition: simplifyWL not nil. *)
       fun simplify () =
           case (!simplifyWL) of
-              nil => ()
-            | n::ns =>
+              n::ns =>
               let in
                 simplifyWL := ns;
                 selectStack := n::(!selectStack);
@@ -135,9 +129,12 @@ fun color {interference = Liveness.IGRAPH{graph,tnode,gtemp,moves},
                  r::rs =>
                  let val min = f r rs in
                    spillWL := remove (!spillWL) min;
-                   simplifyWL := rs
+                   simplifyWL := min::(!simplifyWL)
                  end
           end
+
+      fun pickColor (regs: RS.set) : Frame.register
+          = List.hd(RS.listItems(regs))
 
       (* assign color to all nodes on select stack. The parameter
        * colored is all nodes that are already assigned a color. *)
@@ -160,19 +157,24 @@ fun color {interference = Liveness.IGRAPH{graph,tnode,gtemp,moves},
                   (spillNS := NS.add((!spillNS), n);
                    assignColors(colored))
                 else
-                  assignColors(TT.enter(colored, gtemp n,
-                                        List.hd(RS.listItems(availableColors))))
+                  let val r = pickColor(availableColors) in
+                    assignColors(TT.enter(colored, gtemp n, r))
+                  end
               end
 
       (* the main *loop* *)
       fun iter () =
           let in
-            simplify();
-            if NS.isEmpty(!spillNS) then ()
-            else (selectSpill(); iter())
+            if (not (List.null (!simplifyWL))) then (simplify(); iter())
+            else if (not (List.null (!spillWL))) then (selectSpill(); iter())
+            else ()
           end
     in
-      let in
+      let
+        val (si,sp) = makeWorklists initial
+      in
+        simplifyWL := si;
+        spillWL := sp;
         iter();
         (assignColors(precolored),
          (map gtemp (NS.listItems (!spillNS))))
