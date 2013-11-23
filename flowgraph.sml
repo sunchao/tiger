@@ -5,7 +5,7 @@ struct
 				    use: Temp.temp list Graph.Table.table,
 				    ismove: bool Graph.Table.table}
 
-  (* Note:  any "use" within the block is assumed to be BEFORE a "def" 
+  (* Note:  any "use" within the block is assumed to be BEFORE a "def"
         of the same variable.  If there is a def(x) followed by use(x)
        in the same block, do not mention the use in this data structure,
        mention only the def.
@@ -15,7 +15,7 @@ struct
        If there are any nonzero number of uses BEFORE THE FIRST DEF,
            mention use(x).
 
-     For any node in the graph,  
+     For any node in the graph,
            Graph.Table.look(def,node) = SOME(def-list)
            Graph.Table.look(use,node) = SOME(use-list)
    *)
