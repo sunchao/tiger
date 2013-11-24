@@ -1,5 +1,6 @@
-functor IntMapTable (type key
-		     val getInt: key -> int) : TABLE =
+functor IntMapTable (
+  type key
+	val getInt: key -> int) : TABLE =
 struct
   type key=key
   type 'a table = 'a IntBinaryMap.map
