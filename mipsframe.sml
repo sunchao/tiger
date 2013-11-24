@@ -59,7 +59,7 @@ val SP = TP.newtemp() (* stack pointer *)
 val RA = TP.newtemp() (* return address *)
 val RV = TP.newtemp()
 
-val specialargs = [RV,FP,SP,RA,ZERO]
+val specialargs = [RV,FP,SP,RA]
 
 val argregs = [a0,a1,a2,a3]
 
@@ -68,7 +68,7 @@ val calleesaves = [s0,s1,s2,s3,s4,s5,s6,s7]
 val callersaves = [t0,t1,t2,t3,t4,t5,t6,t7]
 
 val reglist =
-    [("$zero",ZERO),("$a0",a0),("$a1",a1),("$a2",a2),("$a3",a3),
+    [("$a0",a0),("$a1",a1),("$a2",a2),("$a3",a3),
      ("$t0",t0),("$t1",t1),("$t2",t2),("$t3",t3),
      ("$t4",t4),("$t5",t5),("$t6",t6),("$t7",t7),
      ("$s0",s0),("$s1",s1),("$s2",s2),("$s3",s3),
@@ -86,7 +86,7 @@ fun temp_name t =
 
 (* a list of all register name, which can be used for coloring *)
 val registers = map (fn (x) => case TP.Table.look(tempMap,x) of
-                        SOME(r) => r) (argregs @ callersaves @ calleesaves)
+                        SOME(r) => r) (argregs @ calleesaves @ callersaves @ specialargs)
 
 fun string (label, str) : string =
     S.name label ^ ": .asciiz \"" ^ str ^ "\"\n"
