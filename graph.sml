@@ -30,14 +30,14 @@ struct
   fun nodes g = let val b = A.bound g
                     fun f i = if isBogus( A.sub(g,i)) then nil
 			           else (g,i)::f(i+1)
-		 in f 0			     
+		 in f 0
                 end
 
-  fun succ(g,i) = let val NODE{succ=s,...} = A.sub(g,i) 
-		   in map (augment g) s 
+  fun succ(g,i) = let val NODE{succ=s,...} = A.sub(g,i)
+		   in map (augment g) s
 		  end
   fun pred(g,i) = let val NODE{pred=p,...} = A.sub(g,i)
-                     in map (augment g) p 
+                     in map (augment g) p
 		  end
   fun adj gi = pred gi @ succ gi
 
@@ -58,7 +58,7 @@ struct
   fun delete(i,j::rest) = if i=j then rest else j::delete(i,rest)
     | delete(_,nil) = raise GraphEdge
 
-  fun diddle_edge change {from=(g:graph, i),to=(g':graph, j)} = 
+  fun diddle_edge change {from=(g:graph, i),to=(g':graph, j)} =
       let val _ = check(g,g')
           val NODE{succ=si,pred=pi} = A.sub(g,i)
           val _ = A.update(g,i,NODE{succ=change(j,si),pred=pi})
@@ -78,4 +78,3 @@ struct
 
   fun compare ((_,n1),(_,n2)) = Int.compare(n1,n2)
 end
-
