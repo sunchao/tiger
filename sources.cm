@@ -1,11 +1,9 @@
 Group is
 
-testcoloring.sml
-testliveness.sml
 main.sml
 regalloc.sml
 regalloc.sig
-simplecolor.sml
+color.sml
 color.sig
 liveness.sml
 makegraph.sml
