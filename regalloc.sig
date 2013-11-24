@@ -1,4 +1,4 @@
-signature REG_ALLOC = 
+signature REG_ALLOC =
 sig
   structure Frame : FRAME
   type allocation = Frame.register Temp.Table.table
