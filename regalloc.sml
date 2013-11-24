@@ -3,6 +3,7 @@ struct
 structure A = Assem
 structure Frame = MipsFrame
 structure T = Temp
+structure TT = T.Table
 structure Tr = Tree
 type allocation = Frame.register T.Table.table
 
@@ -59,34 +60,45 @@ fun alloc (instrs,frame) : A.instr list * allocation =
               SOME(r) => r
             | NONE => Frame.temp_name temp
 
-      val (graph,nodes) = MakeGraph.instrs2graph instrs
-      val (igraph,liveout) = Liveness.interferenceGraph graph
+      val format1 = A.format(Frame.temp_name)
+      val graph = MakeGraph.instrs2graph instrs
+      val igraph = Liveness.interferenceGraph graph
 
-      fun spillCost node =
+      fun spillCost temp =
           let
-              val Flow.FGRAPH{control,def,use,ismove} = graph
-              val Liveness.IGRAPH{graph,tnode,gtemp,moves} = igraph
-              val temp = gtemp node
-              fun look (table,key) = valOf(Graph.Table.look(table,key))
-              fun f (s,t) = if List.exists (fn x => x = t) s then 1 else 0
-              val num_du =
-                  foldl (fn (n,acc) =>
-                            acc + f(look(def,n),temp) +
-                            f(look(use,n),temp))
-                        0 nodes
-              val interferes = length(Graph.adj node)
+            val Liveness.IGRAPH{graph=igraph,moves} = igraph
+            fun f (s,t) = if List.exists (fn x => x = t) s then 1 else 0
+            val num_du =
+                foldl (fn (Flow.Node{def,use,...},acc) =>
+                          acc + f(def,temp) + f(use,temp))
+                      0 graph
+
+            val Liveness.I.NODE{temp,adj,status} : Liveness.I.node =
+              case List.find
+                (fn Liveness.I.NODE{temp=t,...} => t = temp) igraph
+              of SOME n => n
+               | NONE  => ErrorMsg.impossible("exception in spillCost")
+
+            val interferes = List.length (!adj)
           in
               (Real.fromInt(num_du) / Real.fromInt(interferes))
           end
 
-      val (alloc_table,spills) = SimpleColor.color{interference=igraph,
-					                                         initial=Frame.tempMap,
-					                                         spillCost=spillCost,
-                                                   registers=Frame.registers}
+      val (alloc_table,spills) = Color.color{interference=igraph,
+					                                   initial=Frame.tempMap,
+					                                   spillCost=spillCost,
+                                             registers=Frame.registers}
+
+      fun is_redundant instr =
+          case instr of
+              A.MOVE{assem,dst,src} =>
+              valOf(TT.look(alloc_table,dst)) = valOf(TT.look(alloc_table,src))
+            | _ => false
+
       val format0 = A.format(tempname alloc_table)
-      val format1 = A.format(Temp.makestring)
     in
-      if List.length spills = 0 then (instrs,alloc_table)
+      if List.length spills = 0
+      then (List.filter (fn i => not (is_redundant i)) instrs,alloc_table)
       else alloc(rewrite(instrs,frame,spills),frame)
     end
 end
