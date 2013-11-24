@@ -1,4 +1,4 @@
-signature TABLE = 
+signature TABLE =
 sig
    type key
    type 'a table
