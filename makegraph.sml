@@ -1,7 +1,6 @@
 signature MAKE_GRAPH =
 sig
-  val instrs2graph: Assem.instr list ->
-                    Flow.flowgraph * Graph.node list
+  val instrs2graph: Assem.instr list -> Flow.flowgraph
   val show: TextIO.outstream * Flow.flowgraph * (Temp.temp -> string) -> unit
 end
 
@@ -9,9 +8,9 @@ structure MakeGraph : MAKE_GRAPH =
 struct
 
 structure T = Temp
-structure G = Graph
-structure GT = G.Table
 structure F = Flow
+
+
 (*
  * Algorithm:
  * first pass: make node for each instr,
@@ -26,81 +25,81 @@ structure F = Flow
  *
  *)
 
-fun show (out,F.FGRAPH{control,def,use,ismove},p) =
-    let
-      fun process1 node =
-          TextIO.output(out,
-                        (G.nodename node) ^ "\t" ^
-                        "adj[" ^ (String.concatWith ", "
-                        (map G.nodename (G.adj node))) ^
-                        "] succ[" ^ (String.concatWith ", "
-                        (map G.nodename (G.succ node))) ^
-                        "] def[" ^ (String.concatWith ", "
-                        (map p (valOf(GT.look(def,node))))) ^
-                        "] use[" ^ (String.concatWith ", "
-                        (map p (valOf(GT.look(use,node))))) ^
-                        "] ismove=" ^ Bool.toString(valOf(GT.look(ismove,node)))
-                        ^ "\n")
-    in app process1 (G.nodes control) end
+fun show(out,nodes,p) =
+  let
+    fun plist f list = "[ " ^ String.concatWith "," (map f list) ^ "]"
+    fun pnode (n as Flow.Node{id,...}) = Int.toString id
+  in
+    app
+      (fn (n as F.Node{id,def,use,ismove,succ,prev,liveout}) =>
+        TextIO.output(
+          out,
+          ("n" ^ (Int.toString id) ^ ": " ^
+           "def: " ^ (plist p def) ^ "\n" ^
+           "use: " ^ (plist p use) ^ "\n" ^
+           "succ: " ^ (plist pnode (!succ)) ^ "\n" ^
+           "prev: " ^ (plist pnode (!prev)) ^ "\n" ^
+           "liveout: " ^ (plist T.makestring (!liveout)) ^ "\n"))
+      )
+      nodes
+  end
 
+(* create graph from the instruction list *)
 fun instrs2graph instrs =
-    let
-      fun make_node ((F.FGRAPH{control,def,use,ismove},nodelist), instr) =
-          let val node = G.newNode control
-              val (a,b,c) =
-                  case instr of
-                    Assem.OPER{assem,dst,src,jump} => (dst,src,false)
-                  | Assem.LABEL{assem,lab} => (nil,nil,false)
-                  | Assem.MOVE{assem,dst,src} => ([dst],[src],true)
-          in
-            (F.FGRAPH{control=control,
-                    def=GT.enter(def,node,a),
-                    use=GT.enter(use,node,b),
-                    ismove=GT.enter(ismove,node,c)
-                   },
-             nodelist @ [node])
-          end
+  let
+    fun make_node(instr,(nodelist,count)) =
+      let
+        val (a,b,c) =
+          case instr of
+              Assem.OPER{assem,dst,src,jump} => (dst,src,false)
+            | Assem.LABEL{assem,lab} => (nil,nil,false)
+            | Assem.MOVE{assem,dst,src} => ([dst],[src],true)
 
-      (* we have to maintain the order of nodelist wrt instrs *)
-      val (igraph,nodelist) =
-          foldl (fn (i,(ig,ns)) => make_node((ig,ns),i))
-                (F.FGRAPH{control=G.newGraph (),
-                          def=GT.empty,
-                          use=GT.empty,
-                          ismove=GT.empty},nil) instrs
+        val new_node =
+          F.Node{id=count,def=a,use=b,ismove=c,
+                 succ=ref nil,prev=ref nil,liveout=ref nil}
+      in
+        (nodelist @ [new_node], count+1)
+      end
 
-      val complist = ListPair.zip (instrs, nodelist)
+    (* we have to maintain the order of nodelist wrt instrs *)
+    val (nodelist,_) = foldl make_node (nil,0) instrs
 
-      fun do_make_edge (from,to) =
-          if List.exists (fn n => G.eq(to,n)) (G.adj from)
-          then () else G.mk_edge{from=from,to=to}
+    val complist = ListPair.zip (instrs, nodelist)
 
-      (* only connect x with y if x doesn't jump. *)
-      fun connect nil = ()
-        | connect [(i,x)] = ()
-        | connect ((i1,x)::((i2,y)::rest)) =
-          (case i1 of
-               Assem.OPER{jump=SOME j,...} => ()
-             | _ => do_make_edge(x,y);
-           connect ((i2,y)::rest))
+    fun do_make_edge(from as F.Node{succ,...}, to as F.Node{prev,...}) =
+      if List.exists (fn n => n = to) (!succ) then ()
+      else (succ := to :: (!succ); prev := from :: (!prev))
 
-      fun do_jump (instr,node) =
-          let fun f l =
-                  case List.find
-                           (fn (i,n) =>
-                               case i of
-                                 Assem.LABEL{lab,...} => l = lab
-                               | _ => false
-                           ) complist of
-                    SOME((_,n)) => do_make_edge(node,n)
-          in case instr of
-               Assem.OPER{jump=SOME(jlist),...} => (map f jlist; ())
-             | _ => ()
-          end
+    (* only connect x with y if x doesn't jump. *)
+    fun connect nil = ()
+      | connect [(i,x)] = ()
+      | connect ((i1,x)::((i2,y)::rest)) =
+        (case i1 of
+           Assem.OPER{jump=SOME j,...} => ()
+          | _ => do_make_edge(x,y);
+         connect ((i2,y)::rest))
 
-    in
-      map do_jump complist;
-      connect complist;
-      (igraph,nodelist)
-    end
+    fun do_jump(instr,node) =
+      let
+        fun f l =
+          case List.find
+            (fn (i,n) =>
+              case i of
+                Assem.LABEL{lab,...} => l = lab
+               | _ => false
+            ) complist
+           of
+            SOME((_,n)) => do_make_edge(node,n)
+      in
+        case instr of
+          Assem.OPER{jump=SOME(jlist),...} => (map f jlist; ())
+         | _ => ()
+      end
+
+  in
+    map do_jump complist;
+    connect complist;
+    nodelist
+  end
 end
