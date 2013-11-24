@@ -51,7 +51,6 @@ fun withOpenFile fname f =
 
 fun compile filename =
     let val absyn = Parse.parse filename
-        val _ = PrintAbsyn.print (TextIO.stdOut, absyn)
         val frags = (FindEscape.findEscape absyn;
                      Semant.transProg absyn)
         val (progs,strs) =
