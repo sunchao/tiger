@@ -22,5 +22,4 @@ sig
     val compare: (node * node) -> order
 
     val nodename: node->string  (* for debugging only *)
-
 end
