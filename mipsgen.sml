@@ -54,9 +54,9 @@ fun codegen (frame) (stm:Tree.stm) : Assem.instr list =
                         dst=[],jump=NONE})
 
           (* i <= e2 *)
-          | munchStm (T.MOVE(T.MEM(T.CONST i), e2)) =
-            emit(A.OPER{assem="sw `s0, " ^ int2str i ^ "($zero)",
-                        src=[munchExp e2],dst=[],jump=NONE})
+          (* | munchStm (T.MOVE(T.MEM(T.CONST i), e2)) = *)
+          (*   emit(A.OPER{assem="sw `s0, " ^ int2str i ^ "($zero)", *)
+          (*               src=[munchExp e2],dst=[],jump=NONE}) *)
 
           | munchStm (T.MOVE(T.MEM(e1), e2)) =
             emit(A.OPER{assem="sw `s0, 0(`s1)",
@@ -91,8 +91,7 @@ fun codegen (frame) (stm:Tree.stm) : Assem.instr list =
 
           (* 3, move from register to register *)
           | munchStm (T.MOVE((T.TEMP i, e2))) =
-            emit(A.OPER{assem="move `d0, `s0",
-                        src=[munchExp e2],dst=[i],jump=NONE})
+            emit(A.MOVE{assem="move `d0, `s0",src=munchExp e2,dst=i})
 
           (* branching *)
           | munchStm (T.JUMP(T.NAME lab, _)) =
