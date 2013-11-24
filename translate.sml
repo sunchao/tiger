@@ -181,10 +181,9 @@ fun ifelse (testexp,thenexp,elseexp: exp option) : exp =
         | Nx(thenstm) =>
           (case elseexp of
                NONE =>
-               (print("GET HERE 2\n");
-                Nx(seq[testfun(t,f),
+               Nx(seq[testfun(t,f),
                        T.LABEL t, thenstm,
-                       T.LABEL f]))
+                       T.LABEL f])
              | SOME(st) => (* must be a statement *)
                Nx(seq[testfun(t,f),
                       T.LABEL t, thenstm,
@@ -193,8 +192,8 @@ fun ifelse (testexp,thenexp,elseexp: exp option) : exp =
                       T.JUMP (T.NAME finish, [finish]),
                       T.LABEL finish]))
         | Cx(cf) => (* TODO: fix this *)
-          let val z = Temp.newlabel ()
-              val _ = print("GET HERE 3\n")
+          let
+            val z = Temp.newlabel ()
           in
             case elseexp of
                 SOME(e) =>
