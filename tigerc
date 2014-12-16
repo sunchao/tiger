@@ -1,0 +1,9 @@
+#!/bin/bash
+
+image=tigerc.x86-linux
+
+if [[ $(uname) = Darwin ]]; then
+  image=tigerc.x86-darwin
+fi
+
+sml @SMLload=${image} "$@"
