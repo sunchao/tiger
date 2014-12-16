@@ -4,7 +4,7 @@ structure T = Temp
 structure A = Assem
 structure Frame = MipsFrame
 
-val tempList = 
+val tempList =
     [("a",T.newtemp()),
      ("b",T.newtemp()),
      ("c",T.newtemp()),
@@ -39,7 +39,7 @@ fun str2temp s = #2(valOf(List.find (fn (k,v) => k = s) tempList))
 val temps2 =
     map str2temp ["g","h","f","e","m","b","c","d","k","j"]
 
-val instrs2 = 
+val instrs2 =
     let val g = str2temp "g"
         val h = str2temp "h"
         val f = str2temp "f"
@@ -48,9 +48,9 @@ val instrs2 =
         val b = str2temp "b"
         val c = str2temp "c"
         val d = str2temp "d"
-        val k = str2temp "k" 
+        val k = str2temp "k"
         val j = str2temp "j"
-    in 
+    in
       [ A.OPER {assem="0", src=[], dst=[k,j],jump=NONE},
         A.OPER {assem="1", src=[j],dst=[g],jump=NONE},
         A.OPER {assem="2", src=[k],dst=[h],jump=NONE},
@@ -78,12 +78,12 @@ val initial = Temp.Table.empty
  * we dont have spill or coalesing right now, so no change on instrs
  * alloc is simply the output from Color.color *)
 fun alloc (instrs,frame) : Assem.instr list * allocation =
-    let 
+    let
       val (graph,nodes) = MakeGraph.instrs2graph instrs
 	    val (igraph,liveout) = Liveness.interferenceGraph graph
 	    val (alloc,temps) = SimpleColor.color{interference=igraph,
 					                                  initial=initial,
-					                                  spillCost=(fn _ => 1),
+					                                  spillCost=(fn _ => 1.0),
 					                                  registers=registers}
     in (instrs,alloc) end
 end
@@ -95,28 +95,28 @@ fun println str = TextIO.output (TextIO.stdOut, str ^ "\n")
 fun print_alloc (temps: Temp.temp list,
                  alloc:Frame.register T.Table.table,
                  p: Temp.temp -> string) =
-    app 
-      (fn t => 
-          let val r = 
+    app
+      (fn t =>
+          let val r =
                   case T.Table.look(alloc,t) of
                       SOME r => r
-                    | NONE => 
+                    | NONE =>
                       (println ("No mapping for " ^ (p t) ^ " found.");
                        raise NotGood)
           in println ((p t) ^ " --> " ^ r ^ "\n") end)
       temps
 
-fun print_temp_mapping temps = 
+fun print_temp_mapping temps =
     app
-      (fn t => 
+      (fn t =>
           (TextIO.output(TextIO.stdOut,
-                         (temp2str t) ^ " ==> " ^ 
+                         (temp2str t) ^ " ==> " ^
                          (Temp.makestring t) ^ "\n")))
       temps
 
-fun test (instrs,temps) = 
+fun test (instrs,temps) =
     let
-      val (instrs2,alloc) = 
+      val (instrs2,alloc) =
           TestRegAlloc.alloc
             (instrs, Frame.newFrame{name=Temp.namedlabel "F",formals=[]})
     in
