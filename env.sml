@@ -23,6 +23,7 @@ val base_tenv
 
 val base_funs : fun_info list =
     [("print",[T.STRING],T.UNIT),
+     ("printi",[T.INT],T.UNIT),
      ("flush",[],T.UNIT),
      ("getchar",[],T.STRING),
      ("ord",[T.STRING],T.INT),
