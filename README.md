@@ -41,7 +41,7 @@ Given a tiger source program `foo.tig`, to compile it, you'll need to first copy
 the file to the project directory, and run
 
 ```
-make foo
+make foo.spim
 ```
 
 This will compile the file, append `runtime.s` to it, and generate a
@@ -51,6 +51,8 @@ run
 ```
 spim -file foo.spim
 ```
+
+If `foo.spim` exists, make will not overwrite it. You must remove the file before running make again.
 
 ### Future Work
 
